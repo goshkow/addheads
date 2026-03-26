@@ -35,13 +35,15 @@ public final class Utils {
     }
 
     public static Component prependHead(SkinService skinService, Component message, UUID playerId, String playerName) {
-        return createHeadComponent(skinService, playerId, playerName)
+        return Component.empty()
+                .append(createHeadComponent(skinService, playerId, playerName))
                 .append(Component.space())
                 .append(message);
     }
 
     public static Component prependHead(Component message, UUID playerId, String playerName) {
-        return createHeadComponent(playerId, playerName)
+        return Component.empty()
+                .append(createHeadComponent(playerId, playerName))
                 .append(Component.space())
                 .append(message);
     }
