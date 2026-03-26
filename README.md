@@ -1,5 +1,7 @@
 # AddHeads
 
+[English](#english) | [Русский](#русский)
+
 ## English
 
 Minimal Paper/Purpur plugin for adding player heads to chat and exposing reusable head placeholders for other plugins.
