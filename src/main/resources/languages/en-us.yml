@@ -1,0 +1,72 @@
+﻿command:
+  no-permission: "&7You do not have permission to use this command."
+  players-only: "&7This command can only be used by players."
+  usage: "&7Usage: &f/hd <togglechat|toggletab|settings|info>"
+  reload:
+    success: "&7Configuration, language, and skin cache reloaded."
+  tab-fix:
+    not-installed: "&7TAB is not installed."
+    config-missing: "&7TAB config.yml was not found."
+    already-disabled: "&7TAB MiniMessage support is already disabled. TAB reload was requested."
+    disabled: "&7Disabled TAB MiniMessage support and requested TAB reload."
+    save-failed: "&7Failed to save TAB config.yml: {error}"
+  togglechat:
+    enabled: "&7Chat heads are now enabled for you."
+    disabled: "&7Chat heads are now disabled for you."
+  toggletab:
+    enabled: "&7Tab head placeholders are now enabled for you."
+    disabled: "&7Tab head placeholders are now disabled for you."
+  info:
+    line1: "&7{name} &8version &f{version}"
+    line2: "&7Author: &f{author}"
+settings:
+  menu:
+    title: "&7AddHeads settings"
+    close: "&7Close"
+    language: "&fLanguage"
+    chat: "&fChat heads"
+    placeholder: "&fPlaceholder output"
+    premium-enabled: "&fPremium mode"
+    premium-mode: "&fPremium detection"
+    premium-chat: "&fPremium chat heads"
+    premium-tab: "&fPremium tab heads"
+    skin-refresh: "&fSkin refresh interval"
+    reload: "&fReload plugin"
+  lore:
+    current: "&7Current: &f{value}"
+    click-close: "&7Close the menu"
+    click-cycle: "&7Cycle to the next option"
+    click-toggle: "&7Toggle this setting"
+    click-enter: "&7Click and type a value in chat"
+    click-reload: "&7Reload the plugin"
+    premium-hidden: "&7Enable premium mode to show more settings"
+  prompt:
+    skin-refresh: "&7Type the refresh interval in seconds in chat."
+    cancel: "&7Click here to cancel."
+  feedback:
+    language-changed: "&7Language switched to &f{value}&7."
+    chat-enabled: "&7Chat heads enabled."
+    chat-disabled: "&7Chat heads disabled."
+    placeholder-enabled: "&7Placeholder output enabled."
+    placeholder-disabled: "&7Placeholder output disabled."
+    premium-enabled: "&7Premium mode enabled."
+    premium-disabled: "&7Premium mode disabled."
+    premium-mode: "&7Premium mode set to &f{value}&7."
+    premium-chat-enabled: "&7Premium chat heads enabled."
+    premium-chat-disabled: "&7Premium chat heads disabled."
+    premium-tab-enabled: "&7Premium tab heads enabled."
+    premium-tab-disabled: "&7Premium tab heads disabled."
+    skin-refresh-set: "&7Skin refresh interval set to &f{value} &7seconds."
+    reloaded: "&7Plugin reloaded."
+    cancelled: "&7Cancelled."
+    invalid-number: "&7Please enter a whole number."
+  state:
+    enabled: "&aEnabled"
+    disabled: "&7Disabled"
+admin:
+  tab-warning:
+    line1: "TAB uses MiniMessage mode."
+    line2: "Head placeholders may render incorrectly."
+    button: "Disable TAB MiniMessage"
+    hover: "Update TAB config and reload TAB"
+

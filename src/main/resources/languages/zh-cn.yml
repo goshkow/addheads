@@ -1,0 +1,57 @@
+command:
+  no-permission: "&7你没有使用此命令的权限。"
+  players-only: "&7此命令只能由玩家使用。"
+  usage: "&7用法：&f/hd <togglechat|toggletab|settings|info>"
+  reload:
+    success: "&7配置、语言和皮肤缓存已重新加载。"
+  togglechat:
+    enabled: "&7聊天中的头颅现在对你已启用。"
+    disabled: "&7聊天中的头颅现在对你已禁用。"
+  toggletab:
+    enabled: "&7TAB 中的头颅占位符现在对你已启用。"
+    disabled: "&7TAB 中的头颅占位符现在对你已禁用。"
+  info:
+    line1: "&7{name} &8版本 &f{version}"
+    line2: "&7作者：&f{author}"
+settings:
+  menu:
+    title: "&8AddHeads 设置"
+    close: "&7关闭"
+    language: "&f语言"
+    chat: "&f聊天头颅"
+    placeholder: "&f占位符输出"
+    premium-enabled: "&fPremium 模式"
+    premium-mode: "&fPremium 检测"
+    premium-chat: "&fPremium 聊天头颅"
+    premium-tab: "&fPremium TAB 头颅"
+    skin-refresh: "&f皮肤刷新间隔"
+    reload: "&f重载插件"
+  prompt:
+    skin-refresh: "&7请在聊天中输入刷新间隔（秒）。"
+    cancel: "&7点击此处取消。"
+  feedback:
+    language-changed: "&7语言已切换为 &f{value}&7。"
+    chat-enabled: "&7聊天头颅已启用。"
+    chat-disabled: "&7聊天头颅已禁用。"
+    placeholder-enabled: "&7占位符输出已启用。"
+    placeholder-disabled: "&7占位符输出已禁用。"
+    premium-enabled: "&7Premium 模式已启用。"
+    premium-disabled: "&7Premium 模式已禁用。"
+    premium-mode: "&7Premium 模式已设置为 &f{value}&7。"
+    premium-chat-enabled: "&7Premium 聊天头颅已启用。"
+    premium-chat-disabled: "&7Premium 聊天头颅已禁用。"
+    premium-tab-enabled: "&7Premium TAB 头颅已启用。"
+    premium-tab-disabled: "&7Premium TAB 头颅已禁用。"
+    skin-refresh-set: "&7皮肤刷新间隔已设置为 &f{value} &7秒。"
+    reloaded: "&7插件已重载。"
+    cancelled: "&7已取消。"
+    invalid-number: "&7请输入整数。"
+  state:
+    enabled: "&a已启用"
+    disabled: "&7已禁用"
+admin:
+  tab-warning:
+    line1: "TAB 正在使用 MiniMessage。"
+    line2: "因此头颅占位符可能显示错误。"
+    button: "关闭 TAB 的 MiniMessage"
+    hover: "更新 TAB 配置并重载 TAB"

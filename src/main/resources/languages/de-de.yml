@@ -1,0 +1,57 @@
+command:
+  no-permission: "&7Du hast keine Berechtigung für diesen Befehl."
+  players-only: "&7Dieser Befehl kann nur von Spielern verwendet werden."
+  usage: "&7Verwendung: &f/hd <togglechat|toggletab|settings|info>"
+  reload:
+    success: "&7Konfiguration, Sprache und Skin-Cache neu geladen."
+  togglechat:
+    enabled: "&7Chat-Köpfe sind jetzt für dich aktiviert."
+    disabled: "&7Chat-Köpfe sind jetzt für dich deaktiviert."
+  toggletab:
+    enabled: "&7Tab-Head-ապահholders sind jetzt für dich aktiviert."
+    disabled: "&7Tab-Head-Placeholder sind jetzt für dich deaktiviert."
+  info:
+    line1: "&7{name} &8Version &f{version}"
+    line2: "&7Autor: &f{author}"
+settings:
+  menu:
+    title: "&8AddHeads Einstellungen"
+    close: "&7Schließen"
+    language: "&fSprache"
+    chat: "&fChat-Köpfe"
+    placeholder: "&fPlaceholder-Ausgabe"
+    premium-enabled: "&fPremium-Modus"
+    premium-mode: "&fPremium-Erkennung"
+    premium-chat: "&fPremium-Chat-Köpfe"
+    premium-tab: "&fPremium-TAB-Köpfe"
+    skin-refresh: "&fSkin-Refresh-Intervall"
+    reload: "&fPlugin neu laden"
+  prompt:
+    skin-refresh: "&7Gib das Aktualisierungsintervall in Sekunden in den Chat ein."
+    cancel: "&7Klicke hier zum Abbrechen."
+  feedback:
+    language-changed: "&7Sprache gewechselt zu &f{value}&7."
+    chat-enabled: "&7Chat-Köpfe aktiviert."
+    chat-disabled: "&7Chat-Köpfe deaktiviert."
+    placeholder-enabled: "&7Placeholder-Ausgabe aktiviert."
+    placeholder-disabled: "&7Placeholder-Ausgabe deaktiviert."
+    premium-enabled: "&7Premium-Modus aktiviert."
+    premium-disabled: "&7Premium-Modus deaktiviert."
+    premium-mode: "&7Premium-Modus auf &f{value}&7 gesetzt."
+    premium-chat-enabled: "&7Premium-Chat-Köpfe aktiviert."
+    premium-chat-disabled: "&7Premium-Chat-Köpfe deaktiviert."
+    premium-tab-enabled: "&7Premium-TAB-Köpfe aktiviert."
+    premium-tab-disabled: "&7Premium-TAB-Köpfe deaktiviert."
+    skin-refresh-set: "&7Skin-Refresh-Intervall auf &f{value} &7Sekunden gesetzt."
+    reloaded: "&7Plugin neu geladen."
+    cancelled: "&7Abgebrochen."
+    invalid-number: "&7Bitte eine ganze Zahl eingeben."
+  state:
+    enabled: "&aAktiviert"
+    disabled: "&7Deaktiviert"
+admin:
+  tab-warning:
+    line1: "TAB verwendet MiniMessage."
+    line2: "Head-Placeholders können falsch dargestellt werden."
+    button: "MiniMessage in TAB deaktivieren"
+    hover: "TAB-Konfig aktualisieren und TAB neu laden"

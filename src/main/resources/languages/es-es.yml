@@ -1,0 +1,57 @@
+command:
+  no-permission: "&7No tienes permiso para usar este comando."
+  players-only: "&7Este comando solo puede usarlo un jugador."
+  usage: "&7Uso: &f/hd <togglechat|toggletab|settings|info>"
+  reload:
+    success: "&7Configuración, idioma y caché de skins recargados."
+  togglechat:
+    enabled: "&7Las cabezas en el chat ahora están activadas para ti."
+    disabled: "&7Las cabezas en el chat ahora están desactivadas para ti."
+  toggletab:
+    enabled: "&7Los placeholders de cabezas en TAB ahora están activados para ti."
+    disabled: "&7Los placeholders de cabezas en TAB ahora están desactivados para ti."
+  info:
+    line1: "&7{name} &8versión &f{version}"
+    line2: "&7Autor: &f{author}"
+settings:
+  menu:
+    title: "&8Ajustes de AddHeads"
+    close: "&7Cerrar"
+    language: "&fIdioma"
+    chat: "&fCabezas en chat"
+    placeholder: "&fSalida de placeholder"
+    premium-enabled: "&fModo premium"
+    premium-mode: "&fDetección premium"
+    premium-chat: "&fCabezas premium en chat"
+    premium-tab: "&fCabezas premium en TAB"
+    skin-refresh: "&fIntervalo de actualización"
+    reload: "&fRecargar plugin"
+  prompt:
+    skin-refresh: "&7Escribe el intervalo de actualización en segundos en el chat."
+    cancel: "&7Haz clic aquí para cancelar."
+  feedback:
+    language-changed: "&7Idioma cambiado a &f{value}&7."
+    chat-enabled: "&7Cabezas en el chat activadas."
+    chat-disabled: "&7Cabezas en el chat desactivadas."
+    placeholder-enabled: "&7Salida de placeholder activada."
+    placeholder-disabled: "&7Salida de placeholder desactivada."
+    premium-enabled: "&7Modo premium activado."
+    premium-disabled: "&7Modo premium desactivado."
+    premium-mode: "&7Modo premium establecido en &f{value}&7."
+    premium-chat-enabled: "&7Cabezas premium en chat activadas."
+    premium-chat-disabled: "&7Cabezas premium en chat desactivadas."
+    premium-tab-enabled: "&7Cabezas premium en TAB activadas."
+    premium-tab-disabled: "&7Cabezas premium en TAB desactivadas."
+    skin-refresh-set: "&7Intervalo de actualización de skin establecido en &f{value} &7segundos."
+    reloaded: "&7Plugin recargado."
+    cancelled: "&7Cancelado."
+    invalid-number: "&7Introduce un número entero."
+  state:
+    enabled: "&aActivado"
+    disabled: "&7Desactivado"
+admin:
+  tab-warning:
+    line1: "TAB usa MiniMessage."
+    line2: "Los placeholders de cabeza pueden mostrarse mal."
+    button: "Desactivar MiniMessage en TAB"
+    hover: "Actualizar la configuración de TAB y recargar TAB"
