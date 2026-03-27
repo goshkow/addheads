@@ -5,6 +5,13 @@
 chat: true
 placeholder: true
 
+# Default TAB head injection.
+# Keep this enabled if you want AddHeads to prepend the head automatically to the player list name.
+tab:
+  enabled: true
+  # Default: 20 seconds. Lower values reapply the head more often if another plugin rewrites the list name.
+  refresh-interval-seconds: 20
+
 # Skin refresh interval, in seconds.
 skin-refresh-interval-seconds: 20
 
@@ -46,9 +53,10 @@ premium:
   disable-tab-heads: true
 
 # General notes.
+# - tab.enabled controls the automatic player-list head injection.
+# - tab.refresh-interval-seconds keeps the head visible if another plugin rewrites the list name later.
 # - %addhead_head% is for chat and component-aware plugins.
-# - %addhead_tab% is for TAB and similar PlaceholderAPI-aware plugins.
-# - TAB player head components require components.minimessage-support: false.
-# - AddHeads does not inject heads into tab automatically; insert the placeholder in the target plugin.
+# - %addhead_tab% is optional and mainly useful for custom PlaceholderAPI-based layouts.
+# - The default tab head path does not require placeholders; it uses Paper's playerListName(Component) API.
 # - Missing config keys are backfilled from the bundled template on reload.
 # - Update notices are sent in English to admins with addhead.settings or addhead.reload.

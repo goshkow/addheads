@@ -9,11 +9,15 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
-
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -21,6 +25,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -38,7 +45,7 @@ import java.util.regex.Pattern;
  */
 public final class UpdateCheckerService {
 
-    private static final Pattern VERSION_PATTERN = Pattern.compile("(?i)(?:\\bv)?(\\d+(?:\\.\\d+)+(?:[-+][0-9A-Za-z.-]+)?)");
+    private static final Pattern VERSION_PATTERN = Pattern.compile("(?i)(?:\\bv)?(\\d+(?:\\.\\d+)*)(?:[-+][0-9A-Za-z.-]+)?");
 
     private final AddHeads plugin;
     private final HttpClient httpClient;
@@ -138,6 +145,41 @@ public final class UpdateCheckerService {
         }
     }
 
+    public void downloadUpdateAsync(CommandSender sender, String sourceKey) {
+        if (sender == null) {
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                UpdateState state = currentState;
+                if (state == null || !state.isActive()) {
+                    reply(sender, Component.text("No update is currently available.", NamedTextColor.GRAY));
+                    return;
+                }
+
+                UpdateCandidate candidate = state.selectCandidate(UpdateSource.fromKey(sourceKey));
+                if (candidate == null) {
+                    reply(sender, Component.text("No downloadable update was found.", NamedTextColor.GRAY));
+                    return;
+                }
+
+                Path savedFile = downloadToUpdateFolder(candidate);
+                reply(sender, Component.text()
+                        .append(Component.text("Downloaded ", NamedTextColor.GRAY))
+                        .append(Component.text(candidate.fileName(), NamedTextColor.WHITE))
+                        .append(Component.text(" to ", NamedTextColor.GRAY))
+                        .append(Component.text(savedFile.toString(), NamedTextColor.WHITE))
+                        .append(Component.newline())
+                        .append(Component.text("Restart the server to apply the update.", NamedTextColor.GRAY))
+                        .build());
+            } catch (Exception exception) {
+                plugin.getLogger().warning("Update download failed: " + exception.getMessage());
+                reply(sender, Component.text("Failed to download the update: " + exception.getMessage(), NamedTextColor.GRAY));
+            }
+        });
+    }
+
     private void broadcastToEligiblePlayers(UpdateState state) {
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (currentState != state) {
@@ -206,12 +248,22 @@ public final class UpdateCheckerService {
                 continue;
             }
 
-            String url = stringValue(release, "html_url");
-            if (url.isBlank()) {
-                url = "https://github.com/" + repository + "/releases/latest";
+            String pageUrl = stringValue(release, "html_url");
+            if (pageUrl.isBlank()) {
+                pageUrl = "https://github.com/" + repository + "/releases/latest";
             }
 
-            UpdateCandidate candidate = new UpdateCandidate("GitHub", candidateVersion.get(), url);
+            JsonObject asset = selectReleaseAsset(release);
+            if (asset == null) {
+                continue;
+            }
+            String downloadUrl = stringValue(asset, "browser_download_url");
+            String fileName = stringValue(asset, "name");
+            if (downloadUrl.isBlank() || fileName.isBlank()) {
+                continue;
+            }
+
+            UpdateCandidate candidate = new UpdateCandidate("GitHub", candidateVersion.get(), pageUrl, downloadUrl, fileName);
             if (best == null || candidate.version().compareTo(best.version()) > 0) {
                 best = candidate;
             }
@@ -266,10 +318,22 @@ public final class UpdateCheckerService {
                 continue;
             }
 
+            JsonObject file = selectModrinthFile(version);
+            if (file == null) {
+                continue;
+            }
+            String downloadUrl = stringValue(file, "url");
+            String fileName = stringValue(file, "filename");
+            if (downloadUrl.isBlank() || fileName.isBlank()) {
+                continue;
+            }
+
             UpdateCandidate candidate = new UpdateCandidate(
                     "Modrinth",
                     candidateVersion.get(),
-                    plugin.getConfig().getString("update-check.modrinth.url", "https://modrinth.com/plugin/addheads/versions")
+                    plugin.getConfig().getString("update-check.modrinth.url", "https://modrinth.com/plugin/addheads/versions"),
+                    downloadUrl,
+                    fileName
             );
             if (best == null || candidate.version().compareTo(best.version()) > 0) {
                 best = candidate;
@@ -282,9 +346,19 @@ public final class UpdateCheckerService {
     private Optional<VersionNumber> bestVersion(String... candidates) {
         List<VersionNumber> versions = new ArrayList<>();
         for (String candidate : candidates) {
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+
+            Matcher matcher = VERSION_PATTERN.matcher(candidate);
+            while (matcher.find()) {
+                VersionNumber.parse(candidate.substring(matcher.start(), matcher.end())).ifPresent(versions::add);
+            }
+
             VersionNumber.parse(candidate).ifPresent(versions::add);
         }
-        return versions.stream().max(Comparator.naturalOrder());
+        return versions.stream()
+                .max(Comparator.comparingInt(VersionNumber::partCount).thenComparing(Comparator.naturalOrder()));
     }
 
     private String normalizeRepository(String repository) {
@@ -339,6 +413,94 @@ public final class UpdateCheckerService {
         return object.get(key).getAsString();
     }
 
+    private JsonObject selectReleaseAsset(JsonObject release) {
+        if (release == null || !release.has("assets") || !release.get("assets").isJsonArray()) {
+            return null;
+        }
+
+        JsonArray assets = release.getAsJsonArray("assets");
+        for (JsonElement element : assets) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject asset = element.getAsJsonObject();
+            String name = stringValue(asset, "name");
+            if (name.toLowerCase(Locale.ROOT).endsWith(".jar")) {
+                return asset;
+            }
+        }
+        return null;
+    }
+
+    private JsonObject selectModrinthFile(JsonObject version) {
+        if (version == null || !version.has("files") || !version.get("files").isJsonArray()) {
+            return null;
+        }
+
+        JsonArray files = version.getAsJsonArray("files");
+        for (JsonElement element : files) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject file = element.getAsJsonObject();
+            String filename = stringValue(file, "filename");
+            boolean primary = file.has("primary") && file.get("primary").getAsBoolean();
+            boolean jar = filename.toLowerCase(Locale.ROOT).endsWith(".jar");
+            if ((primary || jar) && !filename.isBlank()) {
+                return file;
+            }
+        }
+        return null;
+    }
+
+    private Path downloadToUpdateFolder(UpdateCandidate candidate) throws IOException, InterruptedException {
+        File parent = plugin.getDataFolder().getParentFile();
+        File updateFolder = new File(parent != null ? parent : plugin.getDataFolder(), "update");
+        Files.createDirectories(updateFolder.toPath());
+
+        String fileName = sanitizeFileName(candidate.fileName());
+        if (fileName.isBlank()) {
+            fileName = "AddHeads-" + candidate.version().display() + ".jar";
+        }
+
+        Path target = updateFolder.toPath().resolve(fileName);
+        HttpRequest request = HttpRequest.newBuilder(URI.create(candidate.downloadUrl()))
+                .timeout(Duration.ofSeconds(30))
+                .header("User-Agent", "AddHeads/" + plugin.getDescription().getVersion())
+                .GET()
+                .build();
+
+        HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException("HTTP " + response.statusCode());
+        }
+
+        Path temp = updateFolder.toPath().resolve(fileName + ".part");
+        try (InputStream inputStream = response.body(); OutputStream outputStream = Files.newOutputStream(temp)) {
+            inputStream.transferTo(outputStream);
+        }
+
+        try {
+            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException exception) {
+            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        return target;
+    }
+
+    private String sanitizeFileName(String input) {
+        if (input == null) {
+            return "";
+        }
+        return input.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+    }
+
+    private void reply(CommandSender sender, Component message) {
+        String plain = PlainTextComponentSerializer.plainText().serialize(message);
+        Bukkit.getScheduler().runTask(plugin, () -> sender.sendMessage(plain));
+    }
+
     private Component buildMessage(UpdateState state) {
         String current = state.currentVersion().display();
         Component header = Component.text()
@@ -362,6 +524,8 @@ public final class UpdateCheckerService {
         }
 
         Component buttons = Component.text()
+                .append(button("Download latest", "/hd update latest"))
+                .append(Component.space())
                 .append(button("Open GitHub", state.github() != null ? state.github().url() : plugin.getConfig().getString("update-check.github.url", "https://github.com/goshkow/addheads/releases/latest")))
                 .append(Component.space())
                 .append(Component.text("|", NamedTextColor.DARK_GRAY))
@@ -380,11 +544,11 @@ public final class UpdateCheckerService {
     private Component button(String label, String url) {
         return Component.text("[" + label + "]", NamedTextColor.AQUA)
                 .decorate(TextDecoration.UNDERLINED)
-                .clickEvent(ClickEvent.openUrl(url))
-                .hoverEvent(HoverEvent.showText(Component.text("Open the release page", NamedTextColor.WHITE)));
+                .clickEvent(url.startsWith("/") ? ClickEvent.runCommand(url) : ClickEvent.openUrl(url))
+                .hoverEvent(HoverEvent.showText(Component.text(url.startsWith("/") ? "Download and queue the update" : "Open the release page", NamedTextColor.WHITE)));
     }
 
-    private record UpdateCandidate(String sourceName, VersionNumber version, String url) {
+    private record UpdateCandidate(String sourceName, VersionNumber version, String url, String downloadUrl, String fileName) {
     }
 
     private static final class UpdateState {
@@ -408,13 +572,27 @@ public final class UpdateCheckerService {
             return github != null || modrinth != null;
         }
 
+        private UpdateCandidate selectCandidate(UpdateSource source) {
+            if (source == null || source == UpdateSource.LATEST) {
+                if (github != null && modrinth != null) {
+                    return github.version().compareTo(modrinth.version()) >= 0 ? github : modrinth;
+                }
+                return github != null ? github : modrinth;
+            }
+            return switch (source) {
+                case GITHUB -> github;
+                case MODRINTH -> modrinth;
+                case LATEST -> github != null ? github : modrinth;
+            };
+        }
+
         private boolean markNotified(UUID playerId) {
             return playerId != null && notifiedPlayers.add(playerId);
         }
 
         private String signature() {
-            String githubSignature = github == null ? "-" : github.version().display() + "@" + github.url();
-            String modrinthSignature = modrinth == null ? "-" : modrinth.version().display() + "@" + modrinth.url();
+            String githubSignature = github == null ? "-" : github.version().display() + "@" + github.url() + "@" + github.downloadUrl();
+            String modrinthSignature = modrinth == null ? "-" : modrinth.version().display() + "@" + modrinth.url() + "@" + modrinth.downloadUrl();
             return githubSignature + "|" + modrinthSignature;
         }
 
@@ -428,6 +606,23 @@ public final class UpdateCheckerService {
 
         private UpdateCandidate modrinth() {
             return modrinth;
+        }
+    }
+
+    private enum UpdateSource {
+        LATEST,
+        GITHUB,
+        MODRINTH;
+
+        private static UpdateSource fromKey(String value) {
+            if (value == null || value.isBlank()) {
+                return LATEST;
+            }
+            return switch (value.trim().toLowerCase(Locale.ROOT)) {
+                case "github" -> GITHUB;
+                case "modrinth" -> MODRINTH;
+                default -> LATEST;
+            };
         }
     }
 
@@ -453,15 +648,8 @@ public final class UpdateCheckerService {
             }
 
             String raw = matcher.group(1);
+            boolean preRelease = matcher.end(1) < value.length() && value.charAt(matcher.end(1)) == '-';
             String numeric = raw;
-            boolean preRelease = false;
-            int dash = raw.indexOf('-');
-            int plus = raw.indexOf('+');
-            int cutIndex = dash >= 0 && plus >= 0 ? Math.min(dash, plus) : Math.max(dash, plus);
-            if (cutIndex >= 0) {
-                numeric = raw.substring(0, cutIndex);
-                preRelease = raw.charAt(cutIndex) == '-';
-            }
 
             String[] tokens = numeric.split("\\.");
             List<Integer> parts = new ArrayList<>(tokens.length);
@@ -485,6 +673,10 @@ public final class UpdateCheckerService {
 
         private String display() {
             return display;
+        }
+
+        private int partCount() {
+            return parts.size();
         }
 
         @Override

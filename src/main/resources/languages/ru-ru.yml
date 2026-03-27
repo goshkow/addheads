@@ -7,8 +7,8 @@
   tab-fix:
     not-installed: "&7TAB не установлен."
     config-missing: "&7Файл config.yml плагина TAB не найден."
-    already-disabled: "&7MiniMessage в TAB уже отключён. Был выполнен reload TAB."
-    disabled: "&7MiniMessage в TAB отключён. Выполнен reload TAB."
+    already-disabled: "&7Исправление TAB уже не требуется. Был выполнен reload TAB."
+    disabled: "&7Настройки исправления TAB обновлены. Выполнен reload TAB."
     save-failed: "&7Не удалось сохранить config.yml TAB: {error}"
   togglechat:
     enabled: "&7Головы в чате теперь включены для вас."
@@ -31,6 +31,7 @@ settings:
     language: "&fЯзык"
     chat: "&fГоловы в чате"
     placeholder: "&fPlaceholder-вывод"
+    tab: "&fГоловы в TAB"
     premium-enabled: "&fPremium mode"
     premium-mode: "&fОпределение premium"
     premium-chat: "&fГоловы premium в чате"
@@ -54,6 +55,8 @@ settings:
     chat-disabled: "&7Головы в чате выключены."
     placeholder-enabled: "&7Placeholder-вывод включён."
     placeholder-disabled: "&7Placeholder-вывод выключен."
+    tab-enabled: "&7Головы в TAB включены."
+    tab-disabled: "&7Головы в TAB выключены."
     premium-enabled: "&7Premium mode включён."
     premium-disabled: "&7Premium mode выключен."
     premium-mode: "&7Premium mode установлен на &f{value}&7."
@@ -69,11 +72,5 @@ settings:
   state:
     enabled: "&fВключено"
     disabled: "&7Выключено"
-admin:
-  tab-warning:
-    line1: "У TAB включён MiniMessage."
-    line2: "Из-за этого головы могут отображаться неверно."
-    button: "Выключить MiniMessage в TAB"
-    hover: "Обновить конфиг TAB и перезагрузить TAB"
 
 

@@ -20,6 +20,7 @@ settings:
     language: "&fLangue"
     chat: "&fTêtes dans le chat"
     placeholder: "&fSortie placeholder"
+    tab: "&fTêtes TAB"
     premium-enabled: "&fMode premium"
     premium-mode: "&fDétection premium"
     premium-chat: "&fTêtes premium dans le chat"
@@ -35,6 +36,8 @@ settings:
     chat-disabled: "&7Têtes de chat désactivées."
     placeholder-enabled: "&7Sortie placeholder activée."
     placeholder-disabled: "&7Sortie placeholder désactivée."
+    tab-enabled: "&7Têtes TAB activées."
+    tab-disabled: "&7Têtes TAB désactivées."
     premium-enabled: "&7Mode premium activé."
     premium-disabled: "&7Mode premium désactivé."
     premium-mode: "&7Mode premium défini sur &f{value}&7."
@@ -49,9 +52,3 @@ settings:
   state:
     enabled: "&aActivé"
     disabled: "&7Désactivé"
-admin:
-  tab-warning:
-    line1: "TAB utilise MiniMessage."
-    line2: "Les placeholders de tête peuvent s'afficher incorrectement."
-    button: "Désactiver MiniMessage dans TAB"
-    hover: "Mettre à jour la config TAB et recharger TAB"

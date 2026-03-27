@@ -5,6 +5,8 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.YamlConfiguration;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,6 +18,10 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import org.bukkit.NamespacedKey;
+import org.bukkit.persistence.PersistentDataType;
 
 /**
  * Main plugin bootstrap.
@@ -32,6 +38,11 @@ public final class AddHeads extends JavaPlugin {
     private SettingsSessionService settingsSessionService;
     private SettingsMenu settingsMenu;
     private UpdateCheckerService updateCheckerService;
+    private final ConcurrentMap<UUID, Component> tabBaseNames = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, Component> tabRenderedNames = new ConcurrentHashMap<>();
+    private NamespacedKey tabBaseNameKey;
+    private NamespacedKey tabRenderedNameKey;
+    private int tabRefreshTaskId = -1;
 
     @Override
     public void onEnable() {
@@ -42,18 +53,22 @@ public final class AddHeads extends JavaPlugin {
         languageManager = new LanguageManager(this);
         settingsSessionService = new SettingsSessionService();
         settingsMenu = new SettingsMenu(this, settingsSessionService);
+        tabBaseNameKey = new NamespacedKey(this, "tab_base_name");
+        tabRenderedNameKey = new NamespacedKey(this, "tab_rendered_name");
         preferenceService.load();
         languageManager.reload(getConfig().getString("language.file", "en-us.yml"));
 
         // Decorate the final chat component after external formatters finish their work.
         getServer().getPluginManager().registerEvents(new AsyncChatListener(this, skinService), this);
 
-        getServer().getPluginManager().registerEvents(new SkinSyncListener(skinService), this);
+        getServer().getPluginManager().registerEvents(new SkinSyncListener(this, skinService), this);
         getServer().getPluginManager().registerEvents(new AdminNoticeListener(this), this);
         getServer().getPluginManager().registerEvents(new SettingsMenuListener(this, settingsMenu, settingsSessionService), this);
         skinService.start(getSkinRefreshIntervalTicks());
         updateCheckerService = new UpdateCheckerService(this);
         updateCheckerService.start();
+        startTabRefreshTask();
+        Bukkit.getScheduler().runTask(this, this::refreshAllTabListNames);
 
         // Placeholder outputs are the supported compatibility layer for TAB and similar plugins.
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
@@ -72,8 +87,6 @@ public final class AddHeads extends JavaPlugin {
             getLogger().info("SkinsRestorer detected, custom skins will be used when available.");
         }
 
-        logTabCompatibilityStatus();
-
         AddHeadsCommand command = new AddHeadsCommand(this);
         if (getCommand("addhead") != null) {
             getCommand("addhead").setExecutor(command);
@@ -90,12 +103,19 @@ public final class AddHeads extends JavaPlugin {
         if (updateCheckerService != null) {
             updateCheckerService.stop();
         }
+        stopTabRefreshTask();
+        restoreAllTabListNames();
         if (preferenceService != null) {
             preferenceService.save();
         }
+        tabBaseNames.clear();
+        tabRenderedNames.clear();
     }
 
     public void reloadPlugin() {
+        restoreAllTabListNames();
+        tabBaseNames.clear();
+        tabRenderedNames.clear();
         reloadConfig();
         refreshConfigDefaults();
         if (preferenceService != null) {
@@ -106,7 +126,11 @@ public final class AddHeads extends JavaPlugin {
         if (updateCheckerService != null) {
             updateCheckerService.restart();
         }
-        logTabCompatibilityStatus();
+        startTabRefreshTask();
+        for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
+            captureTabBaseName(player);
+        }
+        refreshAllTabListNames();
     }
 
     public void reloadLanguage() {
@@ -128,6 +152,10 @@ public final class AddHeads extends JavaPlugin {
 
     public boolean isPlaceholderFeatureEnabled() {
         return getConfig().getBoolean("placeholder", true);
+    }
+
+    public boolean isTabFeatureEnabled() {
+        return getConfig().getBoolean("tab.enabled", true);
     }
 
     public boolean isChatHeadSpaceEnabled() {
@@ -232,19 +260,112 @@ public final class AddHeads extends JavaPlugin {
     }
 
     public boolean shouldRenderTabHeadFor(org.bukkit.entity.Player viewer) {
-        return isTabEnabledFor(viewer);
+        return isTabFeatureEnabled() && isTabEnabledFor(viewer);
+    }
+
+    public void captureTabBaseName(org.bukkit.entity.Player player) {
+        if (player == null) {
+            return;
+        }
+        UUID playerId = player.getUniqueId();
+        Component stored = readStoredTabBaseName(player);
+        if (stored != null) {
+            tabBaseNames.put(playerId, stored);
+            return;
+        }
+
+        Component base = currentTabBaseName(player);
+        tabBaseNames.put(playerId, base);
+        writeStoredTabBaseName(player, base);
+    }
+
+    public void forgetTabBaseName(UUID playerId) {
+        if (playerId != null) {
+            tabBaseNames.remove(playerId);
+        }
+    }
+
+    public void refreshTabListName(org.bukkit.entity.Player player) {
+        if (player == null) {
+            return;
+        }
+        Component base = tabBaseNames.computeIfAbsent(player.getUniqueId(), ignored -> {
+            Component stored = readStoredTabBaseName(player);
+            if (stored != null) {
+                return stored;
+            }
+            Component current = currentTabBaseName(player);
+            writeStoredTabBaseName(player, current);
+            return current;
+        });
+
+        if (!shouldRenderTabHeadFor(player)) {
+            player.playerListName(base);
+            tabRenderedNames.remove(player.getUniqueId());
+            clearStoredTabRenderedName(player);
+            return;
+        }
+
+        Component current = currentTabBaseName(player);
+        Component headed = Utils.prependHead(
+                skinService,
+                base,
+                player.getUniqueId(),
+                player.getName(),
+                isTabHeadSpaceEnabled()
+        );
+        if (headed.equals(current)) {
+            tabRenderedNames.put(player.getUniqueId(), headed);
+            writeStoredTabRenderedName(player, headed);
+            return;
+        }
+        tabRenderedNames.put(player.getUniqueId(), headed);
+        writeStoredTabRenderedName(player, headed);
+        player.playerListName(headed);
+    }
+
+    public void refreshTabListNameLater(org.bukkit.entity.Player player, long delayTicks) {
+        if (player == null) {
+            return;
+        }
+        Bukkit.getScheduler().runTaskLater(this, () -> refreshTabListName(player), Math.max(0L, delayTicks));
+    }
+
+    public void refreshAllTabListNames() {
+        for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
+            refreshTabListName(player);
+        }
+    }
+
+    public void restoreAllTabListNames() {
+        for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
+            restoreTabListName(player);
+        }
+    }
+
+    public void restoreTabListName(org.bukkit.entity.Player player) {
+        if (player == null) {
+            return;
+        }
+        Component base = tabBaseNames.computeIfAbsent(player.getUniqueId(), ignored -> {
+            Component stored = readStoredTabBaseName(player);
+            return stored != null ? stored : currentTabBaseName(player);
+        });
+        player.playerListName(base);
+        tabRenderedNames.remove(player.getUniqueId());
+        clearStoredTabRenderedName(player);
     }
 
     public boolean shouldRenderTabHeadFor(java.util.UUID viewerId) {
         if (viewerId == null) {
-            return true;
+            return isTabFeatureEnabled();
         }
         org.bukkit.entity.Player viewer = getServer().getPlayer(viewerId);
         if (viewer == null) {
             if (preferenceService.hasTabPreference(viewerId)) {
-                return preferenceService.isTabEnabled(viewerId);
+                return isTabFeatureEnabled() && preferenceService.isTabEnabled(viewerId);
             }
-            return true;
+            return isTabFeatureEnabled();
         }
         return shouldRenderTabHeadFor(viewer);
     }
@@ -258,15 +379,9 @@ public final class AddHeads extends JavaPlugin {
     }
 
     public boolean toggleTabFor(org.bukkit.entity.Player player) {
-        return preferenceService.toggleTab(player.getUniqueId(), isTabEnabledFor(player));
-    }
-
-    public boolean isTabMiniMessageEnabled() {
-        Plugin tabPlugin = getServer().getPluginManager().getPlugin("TAB");
-        if (!(tabPlugin instanceof JavaPlugin tabJavaPlugin)) {
-            return false;
-        }
-        return readTabMiniMessageSupport(tabJavaPlugin);
+        boolean enabled = preferenceService.toggleTab(player.getUniqueId(), isTabEnabledFor(player));
+        refreshTabListName(player);
+        return enabled;
     }
 
     public TabFixResult fixTabMiniMessageSetting() {
@@ -299,32 +414,6 @@ public final class AddHeads extends JavaPlugin {
         return new TabFixResult(true, "command.tab-fix.disabled", Map.of());
     }
 
-    private boolean readTabMiniMessageSupport(JavaPlugin tabJavaPlugin) {
-        File configFile = new File(tabJavaPlugin.getDataFolder(), "config.yml");
-        if (!configFile.isFile()) {
-            return false;
-        }
-
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-        return config.getBoolean("components.minimessage-support", true);
-    }
-
-    private void logTabCompatibilityStatus() {
-        Plugin tabPlugin = getServer().getPluginManager().getPlugin("TAB");
-        if (!(tabPlugin instanceof JavaPlugin tabJavaPlugin)) {
-            return;
-        }
-
-        boolean minimessageSupport = readTabMiniMessageSupport(tabJavaPlugin);
-        if (minimessageSupport) {
-            getLogger().warning("TAB detected with components.minimessage-support=true.");
-            getLogger().warning("TAB player head placeholders are currently not compatible with TAB MiniMessage mode.");
-            getLogger().warning("Set components.minimessage-support to false in TAB if you want %addhead_tab% to render correctly.");
-        } else {
-            getLogger().info("TAB detected with MiniMessage support disabled. %addhead_tab% should render with TAB head components.");
-        }
-    }
-
     private void dispatchTabReload() {
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "tab reload");
     }
@@ -338,6 +427,9 @@ public final class AddHeads extends JavaPlugin {
     }
 
     private boolean isTabEnabledFor(org.bukkit.entity.Player player) {
+        if (!isTabFeatureEnabled()) {
+            return false;
+        }
         UUID playerId = player.getUniqueId();
         if (preferenceService.hasTabPreference(playerId)) {
             return preferenceService.isTabEnabled(playerId);
@@ -375,6 +467,81 @@ public final class AddHeads extends JavaPlugin {
 
         UUID offlineUuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + player.getName()).getBytes(StandardCharsets.UTF_8));
         return !offlineUuid.equals(player.getUniqueId());
+    }
+
+    private Component currentTabBaseName(org.bukkit.entity.Player player) {
+        Component name = player.playerListName();
+        return name != null ? name : Component.text(player.getName());
+    }
+
+    private Component readStoredTabBaseName(org.bukkit.entity.Player player) {
+        if (tabBaseNameKey == null || player == null) {
+            return null;
+        }
+        String json = player.getPersistentDataContainer().get(tabBaseNameKey, PersistentDataType.STRING);
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return GsonComponentSerializer.gson().deserialize(json);
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private void writeStoredTabBaseName(org.bukkit.entity.Player player, Component component) {
+        if (tabBaseNameKey == null || player == null || component == null) {
+            return;
+        }
+        try {
+            player.getPersistentDataContainer().set(
+                    tabBaseNameKey,
+                    PersistentDataType.STRING,
+                    GsonComponentSerializer.gson().serialize(component)
+            );
+        } catch (RuntimeException ignored) {
+            // Persistent storage is best-effort; in-memory fallback still works.
+        }
+    }
+
+    private void writeStoredTabRenderedName(org.bukkit.entity.Player player, Component component) {
+        if (tabRenderedNameKey == null || player == null || component == null) {
+            return;
+        }
+        try {
+            player.getPersistentDataContainer().set(
+                    tabRenderedNameKey,
+                    PersistentDataType.STRING,
+                    GsonComponentSerializer.gson().serialize(component)
+            );
+        } catch (RuntimeException ignored) {
+            // Persistent storage is best-effort; in-memory fallback still works.
+        }
+    }
+
+    private void clearStoredTabRenderedName(org.bukkit.entity.Player player) {
+        if (tabRenderedNameKey == null || player == null) {
+            return;
+        }
+        try {
+            player.getPersistentDataContainer().remove(tabRenderedNameKey);
+        } catch (RuntimeException ignored) {
+            // Best effort only.
+        }
+    }
+
+    private void startTabRefreshTask() {
+        stopTabRefreshTask();
+        long intervalSeconds = Math.max(1L, getConfig().getLong("tab.refresh-interval-seconds", 20L));
+        long intervalTicks = intervalSeconds * 20L;
+        tabRefreshTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, this::refreshAllTabListNames, intervalTicks, intervalTicks);
+    }
+
+    private void stopTabRefreshTask() {
+        if (tabRefreshTaskId != -1) {
+            Bukkit.getScheduler().cancelTask(tabRefreshTaskId);
+            tabRefreshTaskId = -1;
+        }
     }
 
     private Boolean resolvePremiumFromLimboAuth(org.bukkit.entity.Player player) {

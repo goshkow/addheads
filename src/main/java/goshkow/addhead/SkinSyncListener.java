@@ -11,14 +11,23 @@ import org.bukkit.event.player.PlayerQuitEvent;
  */
 public final class SkinSyncListener implements Listener {
 
+    private final AddHeads plugin;
     private final SkinService skinService;
 
-    public SkinSyncListener(SkinService skinService) {
+    public SkinSyncListener(AddHeads plugin, SkinService skinService) {
+        this.plugin = plugin;
         this.skinService = skinService;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {
+        plugin.captureTabBaseName(event.getPlayer());
+        plugin.refreshTabListName(event.getPlayer());
+        plugin.refreshTabListNameLater(event.getPlayer(), 10L);
+        plugin.refreshTabListNameLater(event.getPlayer(), 40L);
+        plugin.refreshTabListNameLater(event.getPlayer(), 100L);
+        plugin.refreshTabListNameLater(event.getPlayer(), 200L);
+        plugin.refreshTabListNameLater(event.getPlayer(), 400L);
         skinService.refresh(event.getPlayer().getUniqueId(), event.getPlayer().getName());
         skinService.refreshLater(event.getPlayer().getUniqueId(), event.getPlayer().getName(), 10L);
         skinService.refreshLater(event.getPlayer().getUniqueId(), event.getPlayer().getName(), 40L);
@@ -30,5 +39,6 @@ public final class SkinSyncListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         skinService.invalidate(event.getPlayer().getUniqueId());
+        plugin.forgetTabBaseName(event.getPlayer().getUniqueId());
     }
 }

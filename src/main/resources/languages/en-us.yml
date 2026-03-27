@@ -7,15 +7,15 @@
   tab-fix:
     not-installed: "&7TAB is not installed."
     config-missing: "&7TAB config.yml was not found."
-    already-disabled: "&7TAB MiniMessage support is already disabled. TAB reload was requested."
-    disabled: "&7Disabled TAB MiniMessage support and requested TAB reload."
+    already-disabled: "&7TAB repair is already up to date. TAB reload was requested."
+    disabled: "&7Updated TAB repair settings and requested TAB reload."
     save-failed: "&7Failed to save TAB config.yml: {error}"
   togglechat:
     enabled: "&7Chat heads are now enabled for you."
     disabled: "&7Chat heads are now disabled for you."
   toggletab:
-    enabled: "&7Tab head placeholders are now enabled for you."
-    disabled: "&7Tab head placeholders are now disabled for you."
+    enabled: "&7Tab heads are now enabled for you."
+    disabled: "&7Tab heads are now disabled for you."
   info:
     line1: "&7{name} &8version &f{version}"
     line2: "&7Author: &f{author}"
@@ -31,6 +31,7 @@ settings:
     language: "&fLanguage"
     chat: "&fChat heads"
     placeholder: "&fPlaceholder output"
+    tab: "&fTab heads"
     premium-enabled: "&fPremium mode"
     premium-mode: "&fPremium detection"
     premium-chat: "&fPremium chat heads"
@@ -54,6 +55,8 @@ settings:
     chat-disabled: "&7Chat heads disabled."
     placeholder-enabled: "&7Placeholder output enabled."
     placeholder-disabled: "&7Placeholder output disabled."
+    tab-enabled: "&7Tab heads enabled."
+    tab-disabled: "&7Tab heads disabled."
     premium-enabled: "&7Premium mode enabled."
     premium-disabled: "&7Premium mode disabled."
     premium-mode: "&7Premium mode set to &f{value}&7."
@@ -69,10 +72,4 @@ settings:
   state:
     enabled: "&fEnabled"
     disabled: "&7Disabled"
-admin:
-  tab-warning:
-    line1: "TAB uses MiniMessage mode."
-    line2: "Head placeholders may render incorrectly."
-    button: "Disable TAB MiniMessage"
-    hover: "Update TAB config and reload TAB"
 

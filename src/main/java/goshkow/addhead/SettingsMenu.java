@@ -28,6 +28,7 @@ public final class SettingsMenu {
     private static final int SLOT_LANGUAGE = 4;
     private static final int SLOT_CHAT = 10;
     private static final int SLOT_PLACEHOLDER = 11;
+    private static final int SLOT_TAB = 12;
     private static final int SLOT_PREMIUM_ENABLED = 13;
     private static final int SLOT_PREMIUM_MODE = 14;
     private static final int SLOT_PREMIUM_CHAT = 15;
@@ -81,6 +82,11 @@ public final class SettingsMenu {
 
         if (slot == SLOT_PLACEHOLDER) {
             toggleBooleanSetting(player, "placeholder", "settings.feedback.placeholder-enabled", "settings.feedback.placeholder-disabled", true);
+            return true;
+        }
+
+        if (slot == SLOT_TAB) {
+            toggleBooleanSetting(player, "tab.enabled", "settings.feedback.tab-enabled", "settings.feedback.tab-disabled", true);
             return true;
         }
 
@@ -252,6 +258,12 @@ public final class SettingsMenu {
         inventory.setItem(SLOT_PLACEHOLDER, item(plugin.isPlaceholderFeatureEnabled() ? ENABLED_MATERIAL : DISABLED_MATERIAL,
                 plugin.getLanguageManager().get("settings.menu.placeholder"), List.of(
                         plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(plugin.isPlaceholderFeatureEnabled()))),
+                        plugin.getLanguageManager().get("settings.lore.click-toggle")
+                )));
+
+        inventory.setItem(SLOT_TAB, item(plugin.isTabFeatureEnabled() ? ENABLED_MATERIAL : DISABLED_MATERIAL,
+                plugin.getLanguageManager().get("settings.menu.tab"), List.of(
+                        plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(plugin.isTabFeatureEnabled()))),
                         plugin.getLanguageManager().get("settings.lore.click-toggle")
                 )));
 

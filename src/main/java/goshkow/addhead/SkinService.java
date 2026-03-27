@@ -1,18 +1,31 @@
 package goshkow.addhead;
 
 import com.destroystokyo.paper.profile.PlayerProfile;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Caches skin texture data so placeholders and chat decoration do not need to
@@ -25,6 +38,8 @@ public final class SkinService {
 
     private final Plugin plugin;
     private final ConcurrentMap<UUID, Utils.TextureData> cache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, CompletableFuture<Utils.TextureData>> pendingMojangLookups = new ConcurrentHashMap<>();
+    private final HttpClient httpClient = HttpClient.newHttpClient();
     private int refreshTaskId = -1;
 
     public SkinService(Plugin plugin) {
@@ -68,9 +83,16 @@ public final class SkinService {
 
         Utils.TextureData data = resolveTexture(playerId, playerName);
         if (data == null) {
-            cache.remove(playerId);
+            if (cache.remove(playerId) != null) {
+                notifyTabProfileUpdated(playerId);
+            }
+            triggerPaperProfileLookup(playerId, playerName);
+            triggerMojangLookup(playerId, playerName);
         } else {
-            cache.put(playerId, data);
+            Utils.TextureData existing = cache.put(playerId, data);
+            if (!Objects.equals(existing, data)) {
+                notifyTabProfileUpdated(playerId);
+            }
         }
     }
 
@@ -104,6 +126,12 @@ public final class SkinService {
             return resolved;
         }
 
+        Utils.TextureData asyncResolved = resolveTextureWithoutLivePlayer(playerId, playerName);
+        if (asyncResolved != null) {
+            cache.put(playerId, asyncResolved);
+            return asyncResolved;
+        }
+
         return null;
     }
 
@@ -119,6 +147,122 @@ public final class SkinService {
             return toTextureData(liveProfileProperties);
         }
 
+        return null;
+    }
+
+    private Utils.TextureData resolveTextureWithoutLivePlayer(UUID playerId, String playerName) {
+        String resolvedName = Utils.resolveName(playerId, playerName);
+        List<ResolvedProperty> skinsRestorerProperties = getSkinsRestorerProperties(playerId, resolvedName);
+        if (!skinsRestorerProperties.isEmpty()) {
+            return toTextureData(skinsRestorerProperties);
+        }
+        return null;
+    }
+
+    private void triggerMojangLookup(UUID playerId, String playerName) {
+        if (playerId == null || playerName == null || playerName.isBlank()) {
+            return;
+        }
+        pendingMojangLookups.computeIfAbsent(playerId, ignored -> CompletableFuture
+                .supplyAsync(() -> fetchMojangTexture(playerName))
+                .whenComplete((textureData, throwable) -> {
+                    pendingMojangLookups.remove(playerId);
+                    if (throwable != null || textureData == null || textureData.value() == null || textureData.value().isBlank()) {
+                        return;
+                    }
+                    cache.put(playerId, textureData);
+                    notifyTabProfileUpdated(playerId);
+                }));
+    }
+
+    private void triggerPaperProfileLookup(UUID playerId, String playerName) {
+        if (playerId == null || playerName == null || playerName.isBlank()) {
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                PlayerProfile profile = Bukkit.createProfileExact(playerId, playerName);
+                profile.update().whenComplete((updatedProfile, throwable) -> {
+                    if (throwable != null || updatedProfile == null) {
+                        return;
+                    }
+
+                    Utils.TextureData textureData = toTextureDataFromPaperProfile(updatedProfile.getProperties());
+                    if (textureData == null || textureData.value() == null || textureData.value().isBlank()) {
+                        return;
+                    }
+
+                    cache.put(playerId, textureData);
+                    notifyTabProfileUpdated(playerId);
+                });
+            } catch (RuntimeException exception) {
+                plugin.getLogger().fine("Paper profile lookup failed for " + playerName + ": " + exception.getMessage());
+            }
+        });
+    }
+
+    private Utils.TextureData fetchMojangTexture(String playerName) {
+        try {
+            String encodedName = URLEncoder.encode(playerName, StandardCharsets.UTF_8);
+            HttpRequest profileRequest = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.mojang.com/users/profiles/minecraft/" + encodedName))
+                    .GET()
+                    .header("User-Agent", "AddHeads/1.0.3")
+                    .build();
+
+            HttpResponse<String> profileResponse = httpClient.send(profileRequest, HttpResponse.BodyHandlers.ofString());
+            if (profileResponse.statusCode() != 200 || profileResponse.body() == null || profileResponse.body().isBlank()) {
+                return null;
+            }
+
+            JsonElement profileElement = JsonParser.parseString(profileResponse.body());
+            if (!profileElement.isJsonObject()) {
+                return null;
+            }
+
+            JsonObject profileObject = profileElement.getAsJsonObject();
+            String id = profileObject.has("id") ? profileObject.get("id").getAsString() : null;
+            if (id == null || id.isBlank()) {
+                return null;
+            }
+
+            HttpRequest textureRequest = HttpRequest.newBuilder()
+                    .uri(URI.create("https://sessionserver.mojang.com/session/minecraft/profile/" + id + "?unsigned=false"))
+                    .GET()
+                    .header("User-Agent", "AddHeads/1.0.3")
+                    .build();
+
+            HttpResponse<String> textureResponse = httpClient.send(textureRequest, HttpResponse.BodyHandlers.ofString());
+            if (textureResponse.statusCode() != 200 || textureResponse.body() == null || textureResponse.body().isBlank()) {
+                return null;
+            }
+
+            JsonElement textureElement = JsonParser.parseString(textureResponse.body());
+            if (!textureElement.isJsonObject()) {
+                return null;
+            }
+
+            JsonObject textureObject = textureElement.getAsJsonObject();
+            if (!textureObject.has("properties") || !textureObject.get("properties").isJsonArray()) {
+                return null;
+            }
+
+            for (JsonElement propertyElement : textureObject.getAsJsonArray("properties")) {
+                if (!propertyElement.isJsonObject()) {
+                    continue;
+                }
+                JsonObject propertyObject = propertyElement.getAsJsonObject();
+                String name = propertyObject.has("name") ? propertyObject.get("name").getAsString() : null;
+                String value = propertyObject.has("value") ? propertyObject.get("value").getAsString() : null;
+                String signature = propertyObject.has("signature") ? propertyObject.get("signature").getAsString() : null;
+                if ("textures".equals(name) && value != null && !value.isBlank()) {
+                    return new Utils.TextureData(value, signature);
+                }
+            }
+        } catch (IOException | InterruptedException | RuntimeException exception) {
+            plugin.getLogger().fine("Mojang texture lookup failed for " + playerName + ": " + exception.getMessage());
+        }
         return null;
     }
 
@@ -197,6 +341,31 @@ public final class SkinService {
             }
         }
         return null;
+    }
+
+    private Utils.TextureData toTextureDataFromPaperProfile(Collection<?> properties) {
+        for (Object property : properties) {
+            String name = invokeString(property, "getName");
+            String value = invokeString(property, "getValue");
+            String signature = invokeString(property, "getSignature");
+            if ("textures".equals(name) && value != null && !value.isBlank()) {
+                return new Utils.TextureData(value, signature);
+            }
+        }
+        return null;
+    }
+
+    private void notifyTabProfileUpdated(UUID playerId) {
+        if (!(plugin instanceof AddHeads addHeads)) {
+            return;
+        }
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null) {
+                addHeads.refreshTabListName(player);
+            }
+        });
     }
 
     private String invokeString(Object target, String methodName) {

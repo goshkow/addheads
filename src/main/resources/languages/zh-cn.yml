@@ -20,6 +20,7 @@ settings:
     language: "&f语言"
     chat: "&f聊天头颅"
     placeholder: "&f占位符输出"
+    tab: "&fTAB 头颅"
     premium-enabled: "&fPremium 模式"
     premium-mode: "&fPremium 检测"
     premium-chat: "&fPremium 聊天头颅"
@@ -35,6 +36,8 @@ settings:
     chat-disabled: "&7聊天头颅已禁用。"
     placeholder-enabled: "&7占位符输出已启用。"
     placeholder-disabled: "&7占位符输出已禁用。"
+    tab-enabled: "&7TAB 头颅已启用。"
+    tab-disabled: "&7TAB 头颅已禁用。"
     premium-enabled: "&7Premium 模式已启用。"
     premium-disabled: "&7Premium 模式已禁用。"
     premium-mode: "&7Premium 模式已设置为 &f{value}&7。"
@@ -49,9 +52,3 @@ settings:
   state:
     enabled: "&a已启用"
     disabled: "&7已禁用"
-admin:
-  tab-warning:
-    line1: "TAB 正在使用 MiniMessage。"
-    line2: "因此头颅占位符可能显示错误。"
-    button: "关闭 TAB 的 MiniMessage"
-    hover: "更新 TAB 配置并重载 TAB"

@@ -20,6 +20,7 @@ settings:
     language: "&fSprache"
     chat: "&fChat-Köpfe"
     placeholder: "&fPlaceholder-Ausgabe"
+    tab: "&fTAB-Köpfe"
     premium-enabled: "&fPremium-Modus"
     premium-mode: "&fPremium-Erkennung"
     premium-chat: "&fPremium-Chat-Köpfe"
@@ -35,6 +36,8 @@ settings:
     chat-disabled: "&7Chat-Köpfe deaktiviert."
     placeholder-enabled: "&7Placeholder-Ausgabe aktiviert."
     placeholder-disabled: "&7Placeholder-Ausgabe deaktiviert."
+    tab-enabled: "&7TAB-Köpfe aktiviert."
+    tab-disabled: "&7TAB-Köpfe deaktiviert."
     premium-enabled: "&7Premium-Modus aktiviert."
     premium-disabled: "&7Premium-Modus deaktiviert."
     premium-mode: "&7Premium-Modus auf &f{value}&7 gesetzt."
@@ -49,9 +52,3 @@ settings:
   state:
     enabled: "&aAktiviert"
     disabled: "&7Deaktiviert"
-admin:
-  tab-warning:
-    line1: "TAB verwendet MiniMessage."
-    line2: "Head-Placeholders können falsch dargestellt werden."
-    button: "MiniMessage in TAB deaktivieren"
-    hover: "TAB-Konfig aktualisieren und TAB neu laden"

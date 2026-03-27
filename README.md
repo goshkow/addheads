@@ -4,14 +4,17 @@
 
 ## English
 
-Minimal Paper/Purpur plugin for adding player heads to chat and exposing reusable head placeholders for other plugins.
+Minimal Paper/Purpur plugin for adding player heads to chat and automatically prepending the head to each player's in-game list name.
 
 ### What It Does
 
 AddHeads does not take over chat formatting.
 It waits until another chat plugin finishes building the final component, then prepends the player's head while preserving the existing formatting, colors, links, hover events, and click events.
 
-For tablists, prefixes, scoreboards, and similar UI, AddHeads provides PlaceholderAPI outputs instead of forcing one specific integration path.
+AddHeads focuses on chat decoration and automatically prepends the head to each player's list-name component through Paper's `playerListName(Component)` API.
+It also provides PlaceholderAPI outputs for custom layouts, prefixes, scoreboards, and similar UI, but the default tab head path no longer depends on placeholder setup.
+
+The plugin also includes admin-facing update checks for GitHub and Modrinth and a localized settings GUI for live config changes.
 
 ### Features
 
@@ -21,9 +24,12 @@ For tablists, prefixes, scoreboards, and similar UI, AddHeads provides Placehold
 - shared skin cache with automatic refresh
 - personal chat/tab visibility toggles
 - localized settings GUI
+- update checks from GitHub and Modrinth
+- subtle local sound feedback for successful commands and menu actions
 - live language switching
 - automatic backfill of missing config and language keys on reload
-- TAB compatibility checks and admin fix action for MiniMessage mode
+- TAB compatibility checks and admin repair action
+- universal automatic tab-head insertion without extra tab-plugin configuration
 
 ### Requirements
 
@@ -37,7 +43,7 @@ Optional:
 
 ### Installation
 
-1. Build or download `AddHeads-1.0.0.jar`.
+1. Build or download `AddHeads-1.0.2.jar`.
 2. Place it into your server `plugins/` folder.
 3. Start or restart the server.
 4. Edit `config.yml` and `languages/*.yml` if needed.
@@ -51,10 +57,17 @@ Available settings:
 
 - `chat`
 - `placeholder`
+- `tab.enabled`
+- `tab.refresh-interval-seconds`
 - `skin-refresh-interval-seconds`
+- `formatting.chat-head-space`
+- `formatting.tab-head-space`
 - `language.file`
 - `messages.prefix`
+- `update-check.*`
 - `premium.*`
+- `addhead.togglechat`
+- `addhead.toggletab`
 
 When AddHeads starts or reloads, it compares the server `config.yml` with the bundled template and fills in any missing keys without overwriting your existing values.
 
@@ -70,7 +83,7 @@ Main placeholders:
 - `%addhead_skin_ready%`
 - `%addhead_tab_visible%`
 
-Recommended default for TAB:
+Optional placeholder mode for custom layouts:
 
 ```txt
 %addhead_tab%
@@ -78,9 +91,11 @@ Recommended default for TAB:
 
 Important for TAB:
 
-- TAB player head components require `components.minimessage-support: false`
-- if MiniMessage support is enabled in TAB, `%addhead_tab%` may not render correctly
-- AddHeads warns admins when it detects this TAB setting
+- `%addhead_tab%` is still available for custom layouts, but it is not required for the default player-list head.
+- `tab.enabled` controls the automatic player-list head injection.
+- `tab.refresh-interval-seconds` controls how often AddHeads re-applies the head so it stays visible if another plugin rewrites the list name.
+- `formatting.tab-head-space` controls whether AddHeads appends a trailing space after the head placeholder
+- keeping that space enabled is strongly recommended; disabling it can make the output look cramped or misaligned
 
 Recommended usage:
 
@@ -106,8 +121,9 @@ From there you can:
 - change premium defaults
 - reload the plugin
 - update the skin refresh interval in seconds
+- see a cleaner, block-based status layout in the menu
 
-`/hd fixtab` is an admin maintenance command kept for TAB MiniMessage repair. It is intentionally not shown in the public usage string.
+`/hd fixtab` is an admin maintenance command kept for TAB repair. It is intentionally not shown in the public usage string.
 
 ### Permissions
 
@@ -119,7 +135,12 @@ addhead.premium
 
 - `addhead.settings` allows opening the settings GUI.
 - `addhead.reload` allows reloading the plugin and using TAB repair actions.
+- Both `addhead.settings` and `addhead.reload` receive English-only update notices.
+- `addhead.togglechat` allows toggling your own chat heads.
+- `addhead.toggletab` allows toggling your own tab heads.
 - `addhead.premium` is only used when `premium.mode=permission`.
+
+The toggle permissions default to `true`, so server owners can revoke them with their permission plugin only when they want to block player-side toggles.
 
 ### Languages
 
@@ -143,16 +164,24 @@ AddHeads resolves skins in this order:
 
 1. SkinsRestorer
 2. live Paper player profile
-3. cached value already resolved by AddHeads
+3. Paper profile update lookup
+4. Mojang profile/session lookup by player name
+5. cached value already resolved by AddHeads
 
 ### Notes
 
 - AddHeads does not require a resource pack.
 - No additional client mods are needed.
 - Everything works on a vanilla client.
-- AddHeads no longer injects heads into tab by itself.
-- For TAB integration, add the placeholder explicitly in TAB's config.
-- If your TAB setup does not render player head object components correctly, check TAB component settings.
+- AddHeads does not require any TAB-side placeholder setup for the default player-list head.
+- The default path uses Paper's `playerListName(Component)` API, so it works without TAB configuration.
+- The automatic tab head path is designed to work out of the box with vanilla player lists and with tab-related plugins without asking you to insert placeholders manually.
+- `tab.enabled` can turn the automatic tab-head injection on or off globally.
+- `tab.refresh-interval-seconds` keeps the head in sync when another plugin rewrites the player list.
+- If no skin texture is available from SkinsRestorer or the live profile, AddHeads tries Paper's profile update API and then Mojang profile/session lookup before falling back to the normal vanilla head.
+- If every texture source fails, the client falls back to the default Steve/Alex-style head automatically.
+- Update checks parse version numbers from release names and tags, so custom release titles are fine.
+- `%addhead_tab%` is still available for custom placeholder-based layouts, but it is optional for the default path.
 
 ### License
 
@@ -179,7 +208,7 @@ AddHeads не берёт на себя форматирование чата.
 - локализованное меню настроек
 - переключение языка на лету
 - автоматическое добавление недостающих ключей в конфиг и языковые файлы при reload
-- проверка TAB и админский фикс MiniMessage режима
+- проверка TAB и админский repair
 
 ### Требования
 
@@ -193,7 +222,7 @@ AddHeads не берёт на себя форматирование чата.
 
 ### Установка
 
-1. Соберите или скачайте `AddHeads-1.0.0.jar`.
+1. Соберите или скачайте `AddHeads-1.0.2.jar`.
 2. Положите его в папку `plugins/` на сервере.
 3. Запустите или перезапустите сервер.
 4. При необходимости отредактируйте `config.yml` и `languages/*.yml`.
@@ -232,13 +261,7 @@ AddHeads не берёт на себя форматирование чата.
 %addhead_tab%
 ```
 
-Важно для TAB:
-
-- head components в TAB требуют `components.minimessage-support: false`
-- если в TAB включён MiniMessage, `%addhead_tab%` может отображаться неправильно
-- AddHeads предупреждает администраторов, если обнаруживает такую настройку TAB
-
-Рекомендуемое использование:
+### Recommended usage:
 
 - перед tab prefix
 - прямо внутри tab prefix
@@ -263,7 +286,7 @@ AddHeads не берёт на себя форматирование чата.
 - перезагружать плагин
 - менять интервал обновления скина в секундах
 
-`/hd fixtab` - служебная админ-команда для исправления TAB MiniMessage. Она специально не показывается в публичном usage.
+`/hd fixtab` - служебная админ-команда для исправления TAB. Она специально не показывается в публичном usage.
 
 ### Права
 
@@ -313,3 +336,4 @@ AddHeads берёт скины в таком порядке:
 ### Лицензия
 
 Проект распространяется под кастомной некоммерческой source-available лицензией, текст которой находится в [`LICENSE`](./LICENSE). Строки авторства указаны в [`NOTICE`](./NOTICE).
+

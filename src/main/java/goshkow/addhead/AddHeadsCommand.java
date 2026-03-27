@@ -111,6 +111,17 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        if (args.length == 2 && args[0].equalsIgnoreCase("update")) {
+            if (!sender.hasPermission("addhead.reload")) {
+                sender.sendMessage(plugin.message("command.no-permission"));
+                return true;
+            }
+
+            plugin.getUpdateCheckerService().downloadUpdateAsync(sender, args[1]);
+            playCommandSound(sender);
+            return true;
+        }
+
         if (args.length == 2 && args[0].equalsIgnoreCase("settings") && args[1].equalsIgnoreCase("cancel")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage(plugin.message("command.players-only"));
