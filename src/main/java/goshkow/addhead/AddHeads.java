@@ -31,6 +31,7 @@ public final class AddHeads extends JavaPlugin {
     private LanguageManager languageManager;
     private SettingsSessionService settingsSessionService;
     private SettingsMenu settingsMenu;
+    private UpdateCheckerService updateCheckerService;
 
     @Override
     public void onEnable() {
@@ -51,6 +52,8 @@ public final class AddHeads extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new AdminNoticeListener(this), this);
         getServer().getPluginManager().registerEvents(new SettingsMenuListener(this, settingsMenu, settingsSessionService), this);
         skinService.start(getSkinRefreshIntervalTicks());
+        updateCheckerService = new UpdateCheckerService(this);
+        updateCheckerService.start();
 
         // Placeholder outputs are the supported compatibility layer for TAB and similar plugins.
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
@@ -84,6 +87,9 @@ public final class AddHeads extends JavaPlugin {
             skinService.stop();
             skinService.clear();
         }
+        if (updateCheckerService != null) {
+            updateCheckerService.stop();
+        }
         if (preferenceService != null) {
             preferenceService.save();
         }
@@ -97,6 +103,9 @@ public final class AddHeads extends JavaPlugin {
         }
         reloadLanguage();
         restartSkinService();
+        if (updateCheckerService != null) {
+            updateCheckerService.restart();
+        }
         logTabCompatibilityStatus();
     }
 
@@ -119,6 +128,14 @@ public final class AddHeads extends JavaPlugin {
 
     public boolean isPlaceholderFeatureEnabled() {
         return getConfig().getBoolean("placeholder", true);
+    }
+
+    public boolean isChatHeadSpaceEnabled() {
+        return getConfig().getBoolean("formatting.chat-head-space", true);
+    }
+
+    public boolean isTabHeadSpaceEnabled() {
+        return getConfig().getBoolean("formatting.tab-head-space", true);
     }
 
     public boolean isPremiumFeatureEnabled() {
@@ -150,6 +167,14 @@ public final class AddHeads extends JavaPlugin {
         return getSkinRefreshIntervalSeconds() * 20L;
     }
 
+    public long getUpdateCheckIntervalHours() {
+        return Math.max(1L, getConfig().getLong("update-check.interval-hours", 6L));
+    }
+
+    public long getUpdateCheckIntervalTicks() {
+        return getUpdateCheckIntervalHours() * 60L * 60L * 20L;
+    }
+
     public void openSettingsMenu(org.bukkit.entity.Player player) {
         if (settingsMenu != null) {
             settingsMenu.open(player);
@@ -178,6 +203,10 @@ public final class AddHeads extends JavaPlugin {
 
     public LanguageManager getLanguageManager() {
         return languageManager;
+    }
+
+    public UpdateCheckerService getUpdateCheckerService() {
+        return updateCheckerService;
     }
 
     public String message(String key) {
@@ -218,6 +247,10 @@ public final class AddHeads extends JavaPlugin {
             return true;
         }
         return shouldRenderTabHeadFor(viewer);
+    }
+
+    public boolean shouldReceiveUpdateNotifications(org.bukkit.entity.Player player) {
+        return player != null && (player.isOp() || player.hasPermission("addhead.settings") || player.hasPermission("addhead.reload"));
     }
 
     public boolean toggleChatFor(org.bukkit.entity.Player player) {

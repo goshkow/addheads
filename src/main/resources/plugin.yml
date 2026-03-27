@@ -1,6 +1,6 @@
 name: AddHeads
 main: goshkow.addhead.AddHeads
-version: 1.0.0
+version: 1.0.1
 api-version: "1.21"
 description: |
   AddHeads
@@ -14,12 +14,24 @@ commands:
     aliases: [hd]
     usage: /hd <togglechat|toggletab|settings|info>
 permissions:
+  addhead.togglechat:
+    description: Allows toggling chat heads for yourself
+    default: true
+  addhead.toggletab:
+    description: Allows toggling tab head placeholders for yourself
+    default: true
   addhead.settings:
     description: Allows opening AddHeads settings GUI
     default: op
   addhead.reload:
     description: Allows reloading AddHeads configuration and skin cache
     default: op
+  addhead.togglechat:
+    description: Allows toggling your own chat heads
+    default: true
+  addhead.toggletab:
+    description: Allows toggling your own tab head placeholders
+    default: true
   addhead.premium:
     description: Used only when premium.mode=permission
     default: false

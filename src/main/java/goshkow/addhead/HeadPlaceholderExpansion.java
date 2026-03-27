@@ -75,7 +75,7 @@ public final class HeadPlaceholderExpansion extends PlaceholderExpansion {
 
             String signedTexture = Utils.buildTabSignedTexture(plugin.getSkinService(), offlinePlayer.getUniqueId(), offlinePlayer.getName());
             if (!signedTexture.isBlank()) {
-                return signedTexture + " ";
+                return plugin.isTabHeadSpaceEnabled() ? signedTexture + " " : signedTexture;
             }
             return "";
         }

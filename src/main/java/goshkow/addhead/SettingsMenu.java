@@ -34,6 +34,9 @@ public final class SettingsMenu {
     private static final int SLOT_PREMIUM_TAB = 16;
     private static final int SLOT_REFRESH = 22;
     private static final int SLOT_RELOAD = 26;
+    private static final Material ENABLED_MATERIAL = Material.SLIME_BLOCK;
+    private static final Material DISABLED_MATERIAL = Material.REDSTONE_BLOCK;
+    private static final Material BACKGROUND_MATERIAL = Material.LIGHT_BLUE_STAINED_GLASS_PANE;
 
     private final AddHeads plugin;
     private final SettingsSessionService sessions;
@@ -67,6 +70,11 @@ public final class SettingsMenu {
         }
 
         if (slot == SLOT_CHAT) {
+            if (!player.hasPermission("addhead.togglechat")) {
+                player.sendMessage(plugin.message("command.no-permission"));
+                playMenuSound(player);
+                return true;
+            }
             toggleBooleanSetting(player, "chat", "settings.feedback.chat-enabled", "settings.feedback.chat-disabled", true);
             return true;
         }
@@ -82,34 +90,45 @@ public final class SettingsMenu {
         }
 
         if (slot == SLOT_PREMIUM_MODE) {
-            if (plugin.isPremiumFeatureEnabled()) {
-                cyclePremiumMode(player);
+            if (!plugin.isPremiumFeatureEnabled()) {
+                player.sendMessage(plugin.message("settings.feedback.premium-inactive"));
+                playMenuSound(player);
+                return true;
             }
+            cyclePremiumMode(player);
             return true;
         }
 
         if (slot == SLOT_PREMIUM_CHAT) {
-            if (plugin.isPremiumFeatureEnabled()) {
-                toggleBooleanSetting(player, "premium.disable-chat-heads", "settings.feedback.premium-chat-enabled", "settings.feedback.premium-chat-disabled", false);
+            if (!plugin.isPremiumFeatureEnabled()) {
+                player.sendMessage(plugin.message("settings.feedback.premium-inactive"));
+                playMenuSound(player);
+                return true;
             }
+            toggleBooleanSetting(player, "premium.disable-chat-heads", "settings.feedback.premium-chat-enabled", "settings.feedback.premium-chat-disabled", false);
             return true;
         }
 
         if (slot == SLOT_PREMIUM_TAB) {
-            if (plugin.isPremiumFeatureEnabled()) {
-                toggleBooleanSetting(player, "premium.disable-tab-heads", "settings.feedback.premium-tab-enabled", "settings.feedback.premium-tab-disabled", false);
+            if (!plugin.isPremiumFeatureEnabled()) {
+                player.sendMessage(plugin.message("settings.feedback.premium-inactive"));
+                playMenuSound(player);
+                return true;
             }
+            toggleBooleanSetting(player, "premium.disable-tab-heads", "settings.feedback.premium-tab-enabled", "settings.feedback.premium-tab-disabled", false);
             return true;
         }
 
         if (slot == SLOT_REFRESH) {
             requestSkinRefreshInput(player);
+            playMenuSound(player);
             return true;
         }
 
         if (slot == SLOT_RELOAD && player.hasPermission("addhead.reload")) {
             plugin.reloadPlugin();
             player.sendMessage(plugin.message("settings.feedback.reloaded"));
+            playMenuSound(player);
             reopenLater(player);
             return true;
         }
@@ -151,6 +170,7 @@ public final class SettingsMenu {
             plugin.saveConfig();
             plugin.restartSkinService();
             player.sendMessage(plugin.message("settings.feedback.skin-refresh-set", java.util.Map.of("value", String.valueOf(seconds))));
+            playMenuSound(player);
             reopenLater(player);
         }
     }
@@ -169,6 +189,7 @@ public final class SettingsMenu {
         plugin.saveConfig();
         plugin.reloadLanguage();
         player.sendMessage(plugin.message("settings.feedback.language-changed", java.util.Map.of("value", stripExtension(next))));
+        playMenuSound(player);
         reopenLater(player);
     }
 
@@ -181,6 +202,7 @@ public final class SettingsMenu {
         plugin.getConfig().set("premium.mode", next);
         plugin.saveConfig();
         player.sendMessage(plugin.message("settings.feedback.premium-mode", java.util.Map.of("value", next)));
+        playMenuSound(player);
         reopenLater(player);
     }
 
@@ -191,6 +213,7 @@ public final class SettingsMenu {
         plugin.saveConfig();
         boolean enabled = trueMeansEnabled ? next : !next;
         player.sendMessage(plugin.message(enabled ? enabledKey : disabledKey));
+        playMenuSound(player);
         reopenLater(player);
     }
 
@@ -199,6 +222,7 @@ public final class SettingsMenu {
         player.closeInventory();
         player.sendMessage(plugin.message("settings.prompt.skin-refresh"));
         sendCancelPrompt(player);
+        playMenuSound(player);
     }
 
     private Inventory build(Player player) {
@@ -207,6 +231,8 @@ public final class SettingsMenu {
             title = "AddHeads settings";
         }
         Inventory inventory = Bukkit.createInventory(new SettingsMenuHolder(), SIZE, colorize("&8" + title));
+
+        fillBackground(inventory);
 
         inventory.setItem(SLOT_CLOSE, item(Material.BARRIER, plugin.getLanguageManager().get("settings.menu.close"), List.of(
                 plugin.getLanguageManager().get("settings.lore.click-close")
@@ -217,47 +243,44 @@ public final class SettingsMenu {
                 plugin.getLanguageManager().get("settings.lore.click-cycle")
         )));
 
-        inventory.setItem(SLOT_CHAT, item(plugin.isChatFeatureEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
+        inventory.setItem(SLOT_CHAT, item(plugin.isChatFeatureEnabled() ? ENABLED_MATERIAL : DISABLED_MATERIAL,
                 plugin.getLanguageManager().get("settings.menu.chat"), List.of(
                         plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(plugin.isChatFeatureEnabled()))),
                         plugin.getLanguageManager().get("settings.lore.click-toggle")
                 )));
 
-        inventory.setItem(SLOT_PLACEHOLDER, item(plugin.isPlaceholderFeatureEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
+        inventory.setItem(SLOT_PLACEHOLDER, item(plugin.isPlaceholderFeatureEnabled() ? ENABLED_MATERIAL : DISABLED_MATERIAL,
                 plugin.getLanguageManager().get("settings.menu.placeholder"), List.of(
                         plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(plugin.isPlaceholderFeatureEnabled()))),
                         plugin.getLanguageManager().get("settings.lore.click-toggle")
                 )));
 
-        inventory.setItem(SLOT_PREMIUM_ENABLED, item(plugin.isPremiumFeatureEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
+        boolean premiumFeatureEnabled = plugin.isPremiumFeatureEnabled();
+        inventory.setItem(SLOT_PREMIUM_ENABLED, item(premiumFeatureEnabled ? ENABLED_MATERIAL : DISABLED_MATERIAL,
                 plugin.getLanguageManager().get("settings.menu.premium-enabled"), List.of(
-                        plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(plugin.isPremiumFeatureEnabled()))),
+                        plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(premiumFeatureEnabled))),
                         plugin.getLanguageManager().get("settings.lore.click-toggle"),
-                        plugin.isPremiumFeatureEnabled()
+                        premiumFeatureEnabled
                                 ? plugin.getLanguageManager().get("settings.lore.click-cycle")
                                 : plugin.getLanguageManager().get("settings.lore.premium-hidden")
                 )));
 
-        if (plugin.isPremiumFeatureEnabled()) {
-            inventory.setItem(SLOT_PREMIUM_MODE, item(Material.COMPARATOR, plugin.getLanguageManager().get("settings.menu.premium-mode"), List.of(
-                    plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", plugin.getPremiumMode())),
-                    plugin.getLanguageManager().get("settings.lore.click-cycle")
-            )));
-
-            boolean premiumChatEnabled = !plugin.getConfig().getBoolean("premium.disable-chat-heads", false);
-            inventory.setItem(SLOT_PREMIUM_CHAT, item(premiumChatEnabled ? Material.LIME_DYE : Material.GRAY_DYE,
-                    plugin.getLanguageManager().get("settings.menu.premium-chat"), List.of(
-                            plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(premiumChatEnabled))),
-                            plugin.getLanguageManager().get("settings.lore.click-toggle")
-                    )));
-
-            boolean premiumTabEnabled = !plugin.getConfig().getBoolean("premium.disable-tab-heads", false);
-            inventory.setItem(SLOT_PREMIUM_TAB, item(premiumTabEnabled ? Material.LIME_DYE : Material.GRAY_DYE,
-                    plugin.getLanguageManager().get("settings.menu.premium-tab"), List.of(
-                            plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(premiumTabEnabled))),
-                            plugin.getLanguageManager().get("settings.lore.click-toggle")
-                    )));
+        boolean premiumModeActive = premiumFeatureEnabled;
+        List<String> premiumModeLore = new ArrayList<>();
+        premiumModeLore.add(plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", plugin.getPremiumMode())));
+        premiumModeLore.add(plugin.getLanguageManager().get("settings.lore.click-cycle"));
+        if (!premiumModeActive) {
+            premiumModeLore.add(plugin.getLanguageManager().get("settings.lore.premium-hidden"));
         }
+        inventory.setItem(SLOT_PREMIUM_MODE, item(Material.COMPARATOR, premiumLabel(plugin.getLanguageManager().get("settings.menu.premium-mode"), premiumModeActive), premiumModeLore));
+
+        boolean premiumChatEnabled = !plugin.getConfig().getBoolean("premium.disable-chat-heads", false);
+        inventory.setItem(SLOT_PREMIUM_CHAT, item(premiumChatEnabled ? ENABLED_MATERIAL : DISABLED_MATERIAL,
+                premiumLabel(plugin.getLanguageManager().get("settings.menu.premium-chat"), premiumFeatureEnabled), premiumToggleLore(premiumChatEnabled, premiumFeatureEnabled)));
+
+        boolean premiumTabEnabled = !plugin.getConfig().getBoolean("premium.disable-tab-heads", false);
+        inventory.setItem(SLOT_PREMIUM_TAB, item(premiumTabEnabled ? ENABLED_MATERIAL : DISABLED_MATERIAL,
+                premiumLabel(plugin.getLanguageManager().get("settings.menu.premium-tab"), premiumFeatureEnabled), premiumToggleLore(premiumTabEnabled, premiumFeatureEnabled)));
 
         inventory.setItem(SLOT_REFRESH, item(Material.CLOCK, plugin.getLanguageManager().get("settings.menu.skin-refresh"), List.of(
                 plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", String.valueOf(plugin.getSkinRefreshIntervalSeconds()))),
@@ -285,6 +308,27 @@ public final class SettingsMenu {
         return stack;
     }
 
+    private void fillBackground(Inventory inventory) {
+        ItemStack filler = item(BACKGROUND_MATERIAL, " ", List.of());
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            inventory.setItem(slot, filler);
+        }
+    }
+
+    private String premiumLabel(String name, boolean active) {
+        return active ? name : "&8# " + name;
+    }
+
+    private List<String> premiumToggleLore(boolean enabled, boolean premiumFeatureEnabled) {
+        List<String> lore = new ArrayList<>();
+        lore.add(plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", booleanState(enabled))));
+        lore.add(plugin.getLanguageManager().get("settings.lore.click-toggle"));
+        if (!premiumFeatureEnabled) {
+            lore.add(plugin.getLanguageManager().get("settings.lore.premium-hidden"));
+        }
+        return lore;
+    }
+
     private List<String> colorize(List<String> input) {
         List<String> result = new ArrayList<>(input.size());
         for (String line : input) {
@@ -304,6 +348,7 @@ public final class SettingsMenu {
     public void cancelPendingInput(Player player) {
         sessions.clear(player.getUniqueId());
         player.sendMessage(plugin.message("settings.feedback.cancelled"));
+        playMenuSound(player);
         reopenLater(player);
     }
 
@@ -350,5 +395,9 @@ public final class SettingsMenu {
         return fileName.toLowerCase(Locale.ROOT).endsWith(".yml")
                 ? fileName.substring(0, fileName.length() - 4)
                 : fileName;
+    }
+
+    private void playMenuSound(Player player) {
+        player.playSound(player.getEyeLocation(), org.bukkit.Sound.UI_BUTTON_CLICK, org.bukkit.SoundCategory.MASTER, 0.35f, 1.2f);
     }
 }

@@ -19,6 +19,11 @@
   info:
     line1: "&7{name} &8version &f{version}"
     line2: "&7Author: &f{author}"
+  update:
+    available: "&7A new version is available."
+    github: "&7GitHub release: &f{version}"
+    modrinth: "&7Modrinth release: &f{version}"
+    current: "&7Current version: &f{version}"
 settings:
   menu:
     title: "&7AddHeads settings"
@@ -39,7 +44,7 @@ settings:
     click-toggle: "&7Toggle this setting"
     click-enter: "&7Click and type a value in chat"
     click-reload: "&7Reload the plugin"
-    premium-hidden: "&7Enable premium mode to show more settings"
+    premium-hidden: "&7This setting is stored, but premium mode is currently disabled."
   prompt:
     skin-refresh: "&7Type the refresh interval in seconds in chat."
     cancel: "&7Click here to cancel."
@@ -56,12 +61,13 @@ settings:
     premium-chat-disabled: "&7Premium chat heads disabled."
     premium-tab-enabled: "&7Premium tab heads enabled."
     premium-tab-disabled: "&7Premium tab heads disabled."
+    premium-inactive: "&7This setting is currently inactive because premium mode is disabled."
     skin-refresh-set: "&7Skin refresh interval set to &f{value} &7seconds."
     reloaded: "&7Plugin reloaded."
     cancelled: "&7Cancelled."
     invalid-number: "&7Please enter a whole number."
   state:
-    enabled: "&aEnabled"
+    enabled: "&fEnabled"
     disabled: "&7Disabled"
 admin:
   tab-warning:

@@ -35,17 +35,29 @@ public final class Utils {
     }
 
     public static Component prependHead(SkinService skinService, Component message, UUID playerId, String playerName) {
-        return Component.empty()
-                .append(createHeadComponent(skinService, playerId, playerName))
-                .append(Component.space())
-                .append(message);
+        return prependHead(skinService, message, playerId, playerName, true);
+    }
+
+    public static Component prependHead(SkinService skinService, Component message, UUID playerId, String playerName, boolean appendSpace) {
+        Component builder = Component.empty()
+                .append(createHeadComponent(skinService, playerId, playerName));
+        if (appendSpace) {
+            builder = builder.append(Component.space());
+        }
+        return builder.append(message);
     }
 
     public static Component prependHead(Component message, UUID playerId, String playerName) {
-        return Component.empty()
-                .append(createHeadComponent(playerId, playerName))
-                .append(Component.space())
-                .append(message);
+        return prependHead(message, playerId, playerName, true);
+    }
+
+    public static Component prependHead(Component message, UUID playerId, String playerName, boolean appendSpace) {
+        Component builder = Component.empty()
+                .append(createHeadComponent(playerId, playerName));
+        if (appendSpace) {
+            builder = builder.append(Component.space());
+        }
+        return builder.append(message);
     }
 
     public static Component createHeadComponent(SkinService skinService, UUID playerId, String playerName) {

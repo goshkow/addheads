@@ -19,6 +19,11 @@
   info:
     line1: "&7{name} &8версия &f{version}"
     line2: "&7Автор: &f{author}"
+  update:
+    available: "&7A new version is available."
+    github: "&7GitHub release: &f{version}"
+    modrinth: "&7Modrinth release: &f{version}"
+    current: "&7Current version: &f{version}"
 settings:
   menu:
     title: "&7Настройки AddHeads"
@@ -39,7 +44,7 @@ settings:
     click-toggle: "&7Переключить настройку"
     click-enter: "&7Нажмите и введите значение в чат"
     click-reload: "&7Перезагрузить плагин"
-    premium-hidden: "&7Включите premium mode, чтобы открыть дополнительные настройки"
+    premium-hidden: "&7Этот параметр сохраняется, но premium mode сейчас отключён."
   prompt:
     skin-refresh: "&7Введите интервал обновления в секундах в чат."
     cancel: "&7Нажмите сюда для отмены."
@@ -56,12 +61,13 @@ settings:
     premium-chat-disabled: "&7Головы premium в чате выключены."
     premium-tab-enabled: "&7Головы premium в TAB включены."
     premium-tab-disabled: "&7Головы premium в TAB выключены."
+    premium-inactive: "&7Этот параметр сейчас неактивен, потому что premium mode отключён."
     skin-refresh-set: "&7Интервал обновления скина установлен на &f{value} &7секунд."
     reloaded: "&7Плагин перезагружен."
     cancelled: "&7Отменено."
     invalid-number: "&7Введите целое число."
   state:
-    enabled: "&aВключено"
+    enabled: "&fВключено"
     disabled: "&7Выключено"
 admin:
   tab-warning:

@@ -5,6 +5,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 
 import java.util.List;
 import java.util.Map;
@@ -30,6 +32,7 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
 
             plugin.reloadPlugin();
             sender.sendMessage(plugin.message("command.reload.success"));
+            playCommandSound(sender);
             return true;
         }
 
@@ -41,6 +44,7 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
 
             AddHeads.TabFixResult result = plugin.fixTabMiniMessageSetting();
             sender.sendMessage(plugin.message(result.messageKey(), result.placeholders()));
+            playCommandSound(sender);
             return true;
         }
 
@@ -49,11 +53,16 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(plugin.message("command.players-only"));
                 return true;
             }
+            if (!player.hasPermission("addhead.togglechat")) {
+                player.sendMessage(plugin.message("command.no-permission"));
+                return true;
+            }
 
             boolean enabled = plugin.toggleChatFor(player);
             sender.sendMessage(plugin.message(
                     enabled ? "command.togglechat.enabled" : "command.togglechat.disabled"
             ));
+            playCommandSound(player);
             return true;
         }
 
@@ -62,11 +71,16 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(plugin.message("command.players-only"));
                 return true;
             }
+            if (!player.hasPermission("addhead.toggletab")) {
+                player.sendMessage(plugin.message("command.no-permission"));
+                return true;
+            }
 
             boolean enabled = plugin.toggleTabFor(player);
             sender.sendMessage(plugin.message(
                     enabled ? "command.toggletab.enabled" : "command.toggletab.disabled"
             ));
+            playCommandSound(player);
             return true;
         }
 
@@ -78,6 +92,7 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(plugin.getLanguageManager().get("command.info.line2", Map.of(
                     "author", "goshkow"
             )));
+            playCommandSound(sender);
             return true;
         }
 
@@ -92,6 +107,7 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
             }
 
             plugin.openSettingsMenu(player);
+            playCommandSound(player);
             return true;
         }
 
@@ -115,8 +131,12 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
             List<String> suggestions = new java.util.ArrayList<>();
             String prefix = args[0].toLowerCase(java.util.Locale.ROOT);
 
-            addSuggestion(suggestions, "togglechat", prefix);
-            addSuggestion(suggestions, "toggletab", prefix);
+            if (sender.hasPermission("addhead.togglechat")) {
+                addSuggestion(suggestions, "togglechat", prefix);
+            }
+            if (sender.hasPermission("addhead.toggletab")) {
+                addSuggestion(suggestions, "toggletab", prefix);
+            }
             if (sender.hasPermission("addhead.settings")) {
                 addSuggestion(suggestions, "settings", prefix);
             }
@@ -131,6 +151,12 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
     private void addSuggestion(List<String> suggestions, String value, String prefix) {
         if (value.startsWith(prefix)) {
             suggestions.add(value);
+        }
+    }
+
+    private void playCommandSound(CommandSender sender) {
+        if (sender instanceof Player player) {
+            player.playSound(player.getEyeLocation(), Sound.UI_BUTTON_CLICK, SoundCategory.MASTER, 0.35f, 1.2f);
         }
     }
 }
