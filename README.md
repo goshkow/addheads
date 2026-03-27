@@ -33,7 +33,7 @@ The plugin also includes admin-facing update checks for GitHub and Modrinth and 
 
 ### Requirements
 
-- Paper / Purpur `1.21.11+`
+- Paper / Purpur `1.21.9+`
 - Java `21`
 
 Optional:
