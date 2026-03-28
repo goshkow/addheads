@@ -22,6 +22,7 @@ public final class SkinSyncListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {
         plugin.captureTabBaseName(event.getPlayer());
+        plugin.syncPremiumDefaults(event.getPlayer());
         plugin.refreshTabListName(event.getPlayer());
         plugin.refreshTabListNameLater(event.getPlayer(), 10L);
         plugin.refreshTabListNameLater(event.getPlayer(), 40L);

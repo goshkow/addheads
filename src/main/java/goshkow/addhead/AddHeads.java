@@ -1,10 +1,16 @@
 package goshkow.addhead;
 
+import goshkow.addhead.api.AddHeadsProvider;
+import goshkow.addhead.api.SkinTexture;
+import goshkow.addhead.api.event.AddHeadsReloadEvent;
+import goshkow.addhead.api.event.AddHeadsSkinResolvedEvent;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.ServicePriority;
+import org.bukkit.plugin.java.JavaPlugin;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 
@@ -13,15 +19,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import org.bukkit.NamespacedKey;
-import org.bukkit.persistence.PersistentDataType;
 
 /**
  * Main plugin bootstrap.
@@ -38,11 +40,11 @@ public final class AddHeads extends JavaPlugin {
     private SettingsSessionService settingsSessionService;
     private SettingsMenu settingsMenu;
     private UpdateCheckerService updateCheckerService;
+    private AddHeadsApiProvider apiProvider;
     private final ConcurrentMap<UUID, Component> tabBaseNames = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Component> tabRenderedNames = new ConcurrentHashMap<>();
     private NamespacedKey tabBaseNameKey;
     private NamespacedKey tabRenderedNameKey;
-    private int tabRefreshTaskId = -1;
 
     @Override
     public void onEnable() {
@@ -53,10 +55,12 @@ public final class AddHeads extends JavaPlugin {
         languageManager = new LanguageManager(this);
         settingsSessionService = new SettingsSessionService();
         settingsMenu = new SettingsMenu(this, settingsSessionService);
+        apiProvider = new AddHeadsApiProvider(this);
         tabBaseNameKey = new NamespacedKey(this, "tab_base_name");
         tabRenderedNameKey = new NamespacedKey(this, "tab_rendered_name");
         preferenceService.load();
         languageManager.reload(getConfig().getString("language.file", "en-us.yml"));
+        getServer().getServicesManager().register(AddHeadsProvider.class, apiProvider, this, ServicePriority.Normal);
 
         // Decorate the final chat component after external formatters finish their work.
         getServer().getPluginManager().registerEvents(new AsyncChatListener(this, skinService), this);
@@ -64,13 +68,11 @@ public final class AddHeads extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SkinSyncListener(this, skinService), this);
         getServer().getPluginManager().registerEvents(new AdminNoticeListener(this), this);
         getServer().getPluginManager().registerEvents(new SettingsMenuListener(this, settingsMenu, settingsSessionService), this);
-        skinService.start(getSkinRefreshIntervalTicks());
+        skinService.start(getCacheRefreshIntervalTicks());
         updateCheckerService = new UpdateCheckerService(this);
         updateCheckerService.start();
-        startTabRefreshTask();
-        Bukkit.getScheduler().runTask(this, this::refreshAllTabListNames);
 
-        // Placeholder outputs are the supported compatibility layer for TAB and similar plugins.
+        // Placeholder outputs are the supported compatibility layer for custom layouts and external plugins.
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
             placeholderExpansion = new HeadPlaceholderExpansion(this);
             boolean registered = placeholderExpansion.register();
@@ -103,10 +105,12 @@ public final class AddHeads extends JavaPlugin {
         if (updateCheckerService != null) {
             updateCheckerService.stop();
         }
-        stopTabRefreshTask();
         restoreAllTabListNames();
         if (preferenceService != null) {
             preferenceService.save();
+        }
+        if (apiProvider != null) {
+            getServer().getServicesManager().unregister(AddHeadsProvider.class, apiProvider);
         }
         tabBaseNames.clear();
         tabRenderedNames.clear();
@@ -126,11 +130,12 @@ public final class AddHeads extends JavaPlugin {
         if (updateCheckerService != null) {
             updateCheckerService.restart();
         }
-        startTabRefreshTask();
         for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
             captureTabBaseName(player);
+            syncPremiumDefaults(player);
         }
         refreshAllTabListNames();
+        Bukkit.getPluginManager().callEvent(new AddHeadsReloadEvent());
     }
 
     public void reloadLanguage() {
@@ -142,7 +147,7 @@ public final class AddHeads extends JavaPlugin {
     public void restartSkinService() {
         if (skinService != null) {
             skinService.clear();
-            skinService.start(getSkinRefreshIntervalTicks());
+            skinService.start(getCacheRefreshIntervalTicks());
         }
     }
 
@@ -158,12 +163,20 @@ public final class AddHeads extends JavaPlugin {
         return getConfig().getBoolean("tab.enabled", true);
     }
 
-    public boolean isChatHeadSpaceEnabled() {
-        return getConfig().getBoolean("formatting.chat-head-space", true);
+    public int getChatHeadSpacing() {
+        return resolveHeadSpacing("formatting.chat-head-spacing", "formatting.chat-head-space", 2);
     }
 
-    public boolean isTabHeadSpaceEnabled() {
-        return getConfig().getBoolean("formatting.tab-head-space", true);
+    public boolean isChatHeadShadowEnabled() {
+        return getConfig().getBoolean("formatting.chat-head-shadow", true);
+    }
+
+    public int getTabHeadSpacing() {
+        return resolveHeadSpacing("formatting.tab-head-spacing", "formatting.tab-head-space", 2);
+    }
+
+    public boolean isTabHeadShadowEnabled() {
+        return getConfig().getBoolean("formatting.tab-head-shadow", false);
     }
 
     public boolean isPremiumFeatureEnabled() {
@@ -171,7 +184,7 @@ public final class AddHeads extends JavaPlugin {
     }
 
     public String getPremiumMode() {
-        return getConfig().getString("premium.mode", "auto");
+        return getConfig().getString("premium.mode", "auto_permission");
     }
 
     public String getLanguageFile() {
@@ -182,17 +195,26 @@ public final class AddHeads extends JavaPlugin {
         return languageManager.getAvailableLanguageFiles();
     }
 
-    public long getSkinRefreshIntervalSeconds() {
-        long seconds = getConfig().getLong("skin-refresh-interval-seconds", -1L);
+    public long getCacheRefreshIntervalSeconds() {
+        long seconds = getConfig().getLong("cache-refresh-interval-seconds", -1L);
         if (seconds < 0L) {
-            long ticks = getConfig().getLong("skin-refresh-interval-ticks", 400L);
+            seconds = getConfig().getLong("skin-refresh-interval-seconds", -1L);
+        }
+        if (seconds < 0L) {
+            seconds = getConfig().getLong("tab.refresh-interval-seconds", -1L);
+        }
+        if (seconds < 0L) {
+            long ticks = getConfig().getLong("skin-refresh-interval-ticks", 1200L);
             seconds = Math.max(1L, Math.round(ticks / 20.0d));
+        }
+        if (seconds < 0L) {
+            seconds = 60L;
         }
         return Math.max(1L, seconds);
     }
 
-    public long getSkinRefreshIntervalTicks() {
-        return getSkinRefreshIntervalSeconds() * 20L;
+    public long getCacheRefreshIntervalTicks() {
+        return getCacheRefreshIntervalSeconds() * 20L;
     }
 
     public long getUpdateCheckIntervalHours() {
@@ -201,6 +223,14 @@ public final class AddHeads extends JavaPlugin {
 
     public long getUpdateCheckIntervalTicks() {
         return getUpdateCheckIntervalHours() * 60L * 60L * 20L;
+    }
+
+    public SkinTexture getResolvedSkinTexture(UUID playerId, String playerName) {
+        Utils.TextureData texture = Utils.getCurrentTextureData(skinService, playerId, playerName);
+        if (texture == null) {
+            return null;
+        }
+        return new SkinTexture(texture.value(), texture.signature());
     }
 
     public void openSettingsMenu(org.bukkit.entity.Player player) {
@@ -235,6 +265,10 @@ public final class AddHeads extends JavaPlugin {
 
     public UpdateCheckerService getUpdateCheckerService() {
         return updateCheckerService;
+    }
+
+    public AddHeadsApiProvider getApiProvider() {
+        return apiProvider;
     }
 
     public String message(String key) {
@@ -307,12 +341,13 @@ public final class AddHeads extends JavaPlugin {
         }
 
         Component current = currentTabBaseName(player);
-        Component headed = Utils.prependHead(
+        Component headed = Utils.prependTabHead(
                 skinService,
                 base,
                 player.getUniqueId(),
                 player.getName(),
-                isTabHeadSpaceEnabled()
+                getTabHeadSpacing(),
+                isTabHeadShadowEnabled()
         );
         if (headed.equals(current)) {
             tabRenderedNames.put(player.getUniqueId(), headed);
@@ -384,40 +419,6 @@ public final class AddHeads extends JavaPlugin {
         return enabled;
     }
 
-    public TabFixResult fixTabMiniMessageSetting() {
-        Plugin tabPlugin = getServer().getPluginManager().getPlugin("TAB");
-        if (!(tabPlugin instanceof JavaPlugin tabJavaPlugin)) {
-            return new TabFixResult(false, "command.tab-fix.not-installed", Map.of());
-        }
-
-        File configFile = new File(tabJavaPlugin.getDataFolder(), "config.yml");
-        if (!configFile.isFile()) {
-            return new TabFixResult(false, "command.tab-fix.config-missing", Map.of());
-        }
-
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-        boolean currentValue = config.getBoolean("components.minimessage-support", true);
-        if (!currentValue) {
-            dispatchTabReload();
-            return new TabFixResult(false, "command.tab-fix.already-disabled", Map.of());
-        }
-
-        config.set("components.minimessage-support", false);
-        try {
-            config.save(configFile);
-        } catch (IOException exception) {
-            String error = exception.getMessage() == null ? "unknown" : exception.getMessage();
-            return new TabFixResult(false, "command.tab-fix.save-failed", Map.of("error", error));
-        }
-
-        dispatchTabReload();
-        return new TabFixResult(true, "command.tab-fix.disabled", Map.of());
-    }
-
-    private void dispatchTabReload() {
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "tab reload");
-    }
-
     private boolean isChatEnabledFor(org.bukkit.entity.Player player) {
         UUID playerId = player.getUniqueId();
         if (preferenceService.hasChatPreference(playerId)) {
@@ -447,20 +448,59 @@ public final class AddHeads extends JavaPlugin {
         return getConfig().getBoolean(path, false);
     }
 
+    public boolean isPremiumPlayerDetected(org.bukkit.entity.Player player) {
+        return isPremiumPlayer(player);
+    }
+
+    public void syncPremiumDefaults(org.bukkit.entity.Player player) {
+        if (player == null || preferenceService == null) {
+            return;
+        }
+
+        if (!isPremiumFeatureEnabled()) {
+            preferenceService.clearPremiumState(player.getUniqueId());
+            return;
+        }
+
+        boolean premium = isPremiumPlayer(player);
+        UUID playerId = player.getUniqueId();
+        boolean hadState = preferenceService.hasPremiumState(playerId);
+        boolean previous = hadState && preferenceService.isPremiumState(playerId);
+        preferenceService.setPremiumState(playerId, premium);
+
+        if (!premium) {
+            return;
+        }
+
+        if (!hadState || !previous) {
+            preferenceService.setChat(playerId, !getConfig().getBoolean("premium.disable-chat-heads", false));
+            preferenceService.setTab(playerId, !getConfig().getBoolean("premium.disable-tab-heads", false));
+            refreshTabListName(player);
+        }
+    }
+
     private boolean isPremiumPlayer(org.bukkit.entity.Player player) {
-        String mode = getConfig().getString("premium.mode", "auto");
+        String mode = getConfig().getString("premium.mode", "auto_permission");
+        String permission = getConfig().getString("premium.permission", "addhead.premium");
+        boolean hasPermission = permission != null && !permission.isBlank() && player.hasPermission(permission);
+
         if ("permission".equalsIgnoreCase(mode)) {
-            String permission = getConfig().getString("premium.permission", "addhead.premium");
-            return permission != null && !permission.isBlank() && player.hasPermission(permission);
+            return hasPermission;
         }
 
-        if ("limboauth".equalsIgnoreCase(mode) || "auto".equalsIgnoreCase(mode)) {
-            Boolean limboAuthPremium = resolvePremiumFromLimboAuth(player);
-            if (limboAuthPremium != null) {
-                return limboAuthPremium;
-            }
+        boolean autoDetected = isPremiumAutoDetected(player);
+        if ("auto".equalsIgnoreCase(mode)) {
+            return autoDetected;
         }
 
+        if ("auto_permission".equalsIgnoreCase(mode)) {
+            return hasPermission || autoDetected;
+        }
+
+        return hasPermission || autoDetected;
+    }
+
+    private boolean isPremiumAutoDetected(org.bukkit.entity.Player player) {
         if (getServer().getOnlineMode()) {
             return true;
         }
@@ -530,88 +570,37 @@ public final class AddHeads extends JavaPlugin {
         }
     }
 
-    private void startTabRefreshTask() {
-        stopTabRefreshTask();
-        long intervalSeconds = Math.max(1L, getConfig().getLong("tab.refresh-interval-seconds", 20L));
-        long intervalTicks = intervalSeconds * 20L;
-        tabRefreshTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, this::refreshAllTabListNames, intervalTicks, intervalTicks);
-    }
-
-    private void stopTabRefreshTask() {
-        if (tabRefreshTaskId != -1) {
-            Bukkit.getScheduler().cancelTask(tabRefreshTaskId);
-            tabRefreshTaskId = -1;
+    private int resolveHeadSpacing(String newPath, String legacyBooleanPath, int defaultValue) {
+        Object configured = getConfig().get(newPath);
+        if (configured instanceof Number number) {
+            return clampHeadSpacing(number.intValue());
         }
-    }
-
-    private Boolean resolvePremiumFromLimboAuth(org.bukkit.entity.Player player) {
-        Plugin limboAuthPlugin = getServer().getPluginManager().getPlugin("LimboAuth");
-        if (limboAuthPlugin == null) {
-            limboAuthPlugin = getServer().getPluginManager().getPlugin("LimboAUF");
-        }
-        if (limboAuthPlugin == null) {
-            return null;
-        }
-
-        List<Object> targets = new ArrayList<>();
-        targets.add(limboAuthPlugin);
-        for (String accessor : List.of("getPremiumService", "getAuthService", "getApi", "getService", "getManager")) {
+        if (configured instanceof String text) {
             try {
-                Method method = limboAuthPlugin.getClass().getMethod(accessor);
-                Object target = method.invoke(limboAuthPlugin);
-                if (target != null) {
-                    targets.add(target);
-                }
-            } catch (ReflectiveOperationException ignored) {
-                // Try the next accessor.
+                return clampHeadSpacing(Integer.parseInt(text.trim()));
+            } catch (NumberFormatException ignored) {
+                // Fall back to legacy value or default.
             }
         }
 
-        for (Object target : targets) {
-            List<Method> methods = new ArrayList<>();
-            methods.add(findMethod(target.getClass(), "isPremium", org.bukkit.entity.Player.class));
-            methods.add(findMethod(target.getClass(), "isPremium", UUID.class));
-            methods.add(findMethod(target.getClass(), "isPremium", String.class));
-            methods.add(findMethod(target.getClass(), "isPlayerPremium", org.bukkit.entity.Player.class));
-            methods.add(findMethod(target.getClass(), "isPlayerPremium", UUID.class));
-            methods.add(findMethod(target.getClass(), "isPlayerPremium", String.class));
-            methods.add(findMethod(target.getClass(), "hasPremium", org.bukkit.entity.Player.class));
-            methods.add(findMethod(target.getClass(), "hasPremium", UUID.class));
-            methods.add(findMethod(target.getClass(), "hasPremium", String.class));
-
-            for (Method method : methods) {
-                if (method == null || !method.getReturnType().equals(boolean.class) && !method.getReturnType().equals(Boolean.class)) {
-                    continue;
-                }
-                try {
-                    Object argument = switch (method.getParameterTypes()[0].getName()) {
-                        case "org.bukkit.entity.Player" -> player;
-                        case "java.util.UUID" -> player.getUniqueId();
-                        case "java.lang.String" -> player.getName();
-                        default -> null;
-                    };
-                    if (argument == null) {
-                        continue;
-                    }
-                    Object value = method.invoke(target, argument);
-                    if (value instanceof Boolean bool) {
-                        return bool;
-                    }
-                } catch (ReflectiveOperationException ignored) {
-                    // Try the next candidate.
-                }
-            }
+        if (getConfig().isBoolean(legacyBooleanPath)) {
+            return getConfig().getBoolean(legacyBooleanPath) ? defaultValue : 0;
         }
-
-        return null;
+        return clampHeadSpacing(defaultValue);
     }
 
-    private Method findMethod(Class<?> type, String name, Class<?> parameterType) {
-        try {
-            return type.getMethod(name, parameterType);
-        } catch (NoSuchMethodException ignored) {
-            return null;
+    private int clampHeadSpacing(int value) {
+        return Math.max(0, Math.min(10, value));
+    }
+
+    public void fireSkinResolvedEvent(UUID playerId, String playerName, Utils.TextureData textureData) {
+        if (playerId == null || textureData == null || textureData.value() == null || textureData.value().isBlank()) {
+            return;
         }
+        SkinTexture texture = new SkinTexture(textureData.value(), textureData.signature());
+        Bukkit.getScheduler().runTask(this, () ->
+                Bukkit.getPluginManager().callEvent(new AddHeadsSkinResolvedEvent(playerId, playerName, texture))
+        );
     }
 
     private String prefix() {
@@ -680,8 +669,5 @@ public final class AddHeads extends JavaPlugin {
             }
         }
         return changed;
-    }
-
-    public record TabFixResult(boolean changed, String messageKey, Map<String, String> placeholders) {
     }
 }

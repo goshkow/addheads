@@ -5,22 +5,24 @@
 chat: true
 placeholder: true
 
-# Default TAB head injection.
+# Default player-list head injection.
 # Keep this enabled if you want AddHeads to prepend the head automatically to the player list name.
 tab:
   enabled: true
-  # Default: 20 seconds. Lower values reapply the head more often if another plugin rewrites the list name.
-  refresh-interval-seconds: 20
 
-# Skin refresh interval, in seconds.
-skin-refresh-interval-seconds: 20
+# Shared refresh interval for skins, cache, and player-list head reapplication.
+cache-refresh-interval-seconds: 60
 
 # Head spacing.
 formatting:
-  # Keep enabled unless you want the head to touch chat text.
-  chat-head-space: true
-  # Keep enabled unless you want TAB output to look cramped.
-  tab-head-space: true
+  # Amount of invisible spacing symbols after the built-in chat head. 0 disables the offset.
+  chat-head-spacing: 2
+  # Keep enabled unless you want the head to use vanilla text shadow in chat.
+  chat-head-shadow: true
+  # Amount of invisible spacing symbols after the built-in tab head. 0 disables the offset.
+  tab-head-spacing: 2
+  # Recommended: false. Disabling the shadow makes the player-list head look more vanilla.
+  tab-head-shadow: false
 
 # Language file from plugins/AddHeads/languages/.
 language:
@@ -34,29 +36,22 @@ messages:
 update-check:
   enabled: true
   interval-hours: 6
-  github:
-    # owner/repo or a GitHub releases URL.
-    repository: goshkow/addheads
-    url: https://github.com/goshkow/addheads/releases/latest
-  modrinth:
-    # project slug or a Modrinth versions URL.
-    project: addheads
-    url: https://modrinth.com/plugin/addheads/versions
 
 # Premium defaults.
 premium:
   enabled: false
-  # auto -> session/UUID, permission -> premium.permission, limboauth -> LimboAuth/LimboAUF first.
-  mode: auto
+  # auto -> session/UUID, permission -> permission only, auto_permission -> permission first then auto detection.
+  mode: auto_permission
   permission: addhead.premium
   disable-chat-heads: false
   disable-tab-heads: true
 
 # General notes.
 # - tab.enabled controls the automatic player-list head injection.
-# - tab.refresh-interval-seconds keeps the head visible if another plugin rewrites the list name later.
+# - cache-refresh-interval-seconds controls both the skin cache refresh and the built-in head reapply cycle.
+# - formatting.* controls the spacing amount and shadow applied to built-in chat and player-list heads.
 # - %addhead_head% is for chat and component-aware plugins.
 # - %addhead_tab% is optional and mainly useful for custom PlaceholderAPI-based layouts.
-# - The default tab head path does not require placeholders; it uses Paper's playerListName(Component) API.
+# - The default player-list head path does not require placeholders; it uses Paper's playerListName(Component) API.
 # - Missing config keys are backfilled from the bundled template on reload.
 # - Update notices are sent in English to admins with addhead.settings or addhead.reload.

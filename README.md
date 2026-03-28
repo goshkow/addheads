@@ -4,36 +4,34 @@
 
 ## English
 
-Minimal Paper/Purpur plugin for adding player heads to chat and automatically prepending the head to each player's in-game list name.
+AddHeads is a Paper/Purpur plugin that adds player heads to chat, automatically prepends them to the in-game player list name, and exposes a reusable API for other plugins.
 
 ### What It Does
 
-AddHeads does not take over chat formatting.
-It waits until another chat plugin finishes building the final component, then prepends the player's head while preserving the existing formatting, colors, links, hover events, and click events.
+AddHeads does not take over chat formatting. It waits until another plugin finishes building the final chat component, then prepends the player's head while preserving colors, links, hover events, click events, and existing formatting.
 
-AddHeads focuses on chat decoration and automatically prepends the head to each player's list-name component through Paper's `playerListName(Component)` API.
-It also provides PlaceholderAPI outputs for custom layouts, prefixes, scoreboards, and similar UI, but the default tab head path no longer depends on placeholder setup.
+For the in-game player list, AddHeads prepends the head automatically through Paper's `playerListName(Component)` API. No manual placeholder insertion is required for the default player-list path.
 
-The plugin also includes admin-facing update checks for GitHub and Modrinth and a localized settings GUI for live config changes.
+AddHeads also exposes a public API and PlaceholderAPI outputs so other plugins can request heads, textures, separators, and export formats directly.
 
 ### Features
 
-- player head rendering in chat using Adventure components
-- PlaceholderAPI support
-- SkinsRestorer-aware skin resolution
+- chat head rendering using Adventure components
+- automatic player-list head insertion
+- public Bukkit service API for other plugins
+- PlaceholderAPI integration with multiple export formats
 - shared skin cache with automatic refresh
-- personal chat/tab visibility toggles
+- SkinsRestorer-aware texture resolution
+- Mojang and Paper profile fallbacks
 - localized settings GUI
+- live config and language reload
+- automatic config and language key backfill
+- per-player toggles for chat and player-list heads
 - update checks from GitHub and Modrinth
-- subtle local sound feedback for successful commands and menu actions
-- live language switching
-- automatic backfill of missing config and language keys on reload
-- TAB compatibility checks and admin repair action
-- universal automatic tab-head insertion without extra tab-plugin configuration
 
 ### Requirements
 
-- Paper / Purpur `1.21.9+`
+- Paper / Purpur `1.21.11+`
 - Java `21`
 
 Optional:
@@ -43,37 +41,96 @@ Optional:
 
 ### Installation
 
-1. Build or download `AddHeads-1.0.2.jar`.
+1. Build or download `AddHeads-1.1.0.jar`.
 2. Place it into your server `plugins/` folder.
 3. Start or restart the server.
 4. Edit `config.yml` and `languages/*.yml` if needed.
 5. Use `/hd settings` or `/hd reload` after making changes.
 
+### Commands
+
+```txt
+/hd togglechat
+/hd toggletab
+/hd settings
+/hd info
+/hd reload
+/hd update <latest|github|modrinth>
+```
+
+### Permissions
+
+```txt
+addhead.togglechat
+addhead.toggletab
+addhead.settings
+addhead.reload
+addhead.premium
+```
+
+- `addhead.togglechat` allows toggling your own chat heads.
+- `addhead.toggletab` allows toggling your own player-list heads.
+- `addhead.settings` allows opening the settings GUI.
+- `addhead.reload` allows reloading the plugin.
+- `addhead.premium` is used when `premium.mode=permission` or `premium.mode=auto_permission`.
+
 ### Configuration
 
 Main config: [`src/main/resources/config.yml`](./src/main/resources/config.yml)
 
-Available settings:
+Key options:
 
 - `chat`
 - `placeholder`
 - `tab.enabled`
-- `tab.refresh-interval-seconds`
-- `skin-refresh-interval-seconds`
-- `formatting.chat-head-space`
-- `formatting.tab-head-space`
+- `cache-refresh-interval-seconds`
+- `formatting.chat-head-spacing`
+- `formatting.chat-head-shadow`
+- `formatting.tab-head-spacing`
+- `formatting.tab-head-shadow`
 - `language.file`
 - `messages.prefix`
-- `update-check.*`
+- `update-check.enabled`
+- `update-check.interval-hours`
 - `premium.*`
-- `addhead.togglechat`
-- `addhead.toggletab`
 
-When AddHeads starts or reloads, it compares the server `config.yml` with the bundled template and fills in any missing keys without overwriting your existing values.
+Update sources for GitHub and Modrinth are built into the plugin and are not configured in `config.yml`.
+
+When AddHeads starts or reloads, missing config keys are filled from the bundled template without overwriting your existing values.
+
+### Public API
+
+AddHeads registers a Bukkit service for direct integration:
+
+```java
+import goshkow.addhead.api.AddHeadsAPI;
+import goshkow.addhead.api.AddHeadsProvider;
+import goshkow.addhead.api.HeadFormat;
+import goshkow.addhead.api.HeadRenderTarget;
+
+AddHeadsProvider api = AddHeadsAPI.provider();
+if (api != null) {
+    String signedTag = api.getFormattedHead(player, HeadFormat.SIGNED_TAG, api.getDefaultOptions(HeadRenderTarget.TAB));
+}
+```
+
+Available API models:
+
+- `AddHeadsProvider`
+- `AddHeadsAPI`
+- `HeadFormat`
+- `HeadRenderOptions`
+- `HeadRenderTarget`
+- `SkinTexture`
+
+Built-in API events:
+
+- `AddHeadsReloadEvent`
+- `AddHeadsSkinResolvedEvent`
 
 ### PlaceholderAPI
 
-Main placeholders:
+Core placeholders:
 
 - `%addhead_head%`
 - `%addhead_tab%`
@@ -83,84 +140,33 @@ Main placeholders:
 - `%addhead_skin_ready%`
 - `%addhead_tab_visible%`
 
-Optional placeholder mode for custom layouts:
+Format-aware placeholders:
 
-```txt
-%addhead_tab%
-```
+- `%addhead_format_json%`
+- `%addhead_format_signed_tag%`
+- `%addhead_format_texture_tag%`
+- `%addhead_format_id_tag%`
+- `%addhead_format_name_tag%`
+- `%addhead_format_texture_value%`
+- `%addhead_format_texture_signature%`
+- `%addhead_format_texture_hash%`
+- `%addhead_format_signed_texture%`
+- `%addhead_format_separator%`
+- `%addhead_format_skin_ready%`
 
-Important for TAB:
+Target-aware placeholders:
 
-- `%addhead_tab%` is still available for custom layouts, but it is not required for the default player-list head.
-- `tab.enabled` controls the automatic player-list head injection.
-- `tab.refresh-interval-seconds` controls how often AddHeads re-applies the head so it stays visible if another plugin rewrites the list name.
-- `formatting.tab-head-space` controls whether AddHeads appends a trailing space after the head placeholder
-- keeping that space enabled is strongly recommended; disabling it can make the output look cramped or misaligned
+- `%addhead_chat_json%`
+- `%addhead_chat_separator%`
+- `%addhead_tab_signed_tag%`
+- `%addhead_tab_separator%`
+- `%addhead_tab_json%`
 
-Recommended usage:
-
-- before the tab prefix
-- directly inside the tab prefix
-- inside LuckPerms prefixes if the target plugin supports PlaceholderAPI
-
-### Commands
-
-```txt
-/hd togglechat
-/hd toggletab
-/hd settings
-/hd info
-```
-
-`/hd settings` opens a localized GUI for admins with `addhead.settings`.
-
-From there you can:
-
-- cycle language files found in `languages/`
-- toggle the main switches
-- change premium defaults
-- reload the plugin
-- update the skin refresh interval in seconds
-- see a cleaner, block-based status layout in the menu
-
-`/hd fixtab` is an admin maintenance command kept for TAB repair. It is intentionally not shown in the public usage string.
-
-### Permissions
-
-```txt
-addhead.settings
-addhead.reload
-addhead.premium
-```
-
-- `addhead.settings` allows opening the settings GUI.
-- `addhead.reload` allows reloading the plugin and using TAB repair actions.
-- Both `addhead.settings` and `addhead.reload` receive English-only update notices.
-- `addhead.togglechat` allows toggling your own chat heads.
-- `addhead.toggletab` allows toggling your own tab heads.
-- `addhead.premium` is only used when `premium.mode=permission`.
-
-The toggle permissions default to `true`, so server owners can revoke them with their permission plugin only when they want to block player-side toggles.
-
-### Languages
-
-Bundled languages:
-
-- `en-us`
-- `ru-ru`
-- `es-es`
-- `de-de`
-- `fr-fr`
-- `pt-br`
-- `zh-cn`
-
-Any `*.yml` file placed in `plugins/AddHeads/languages/` is picked up automatically and becomes available in the settings GUI.
-
-If a language file is older than the current plugin version, missing keys are filled from the English template on reload.
+The `chat_*` and `tab_*` forms use the plugin's default spacing and shadow settings for those targets.
 
 ### Skin Sources
 
-AddHeads resolves skins in this order:
+AddHeads resolves textures in this order:
 
 1. SkinsRestorer
 2. live Paper player profile
@@ -173,42 +179,41 @@ AddHeads resolves skins in this order:
 - AddHeads does not require a resource pack.
 - No additional client mods are needed.
 - Everything works on a vanilla client.
-- AddHeads does not require any TAB-side placeholder setup for the default player-list head.
-- The default path uses Paper's `playerListName(Component)` API, so it works without TAB configuration.
-- The automatic tab head path is designed to work out of the box with vanilla player lists and with tab-related plugins without asking you to insert placeholders manually.
-- `tab.enabled` can turn the automatic tab-head injection on or off globally.
-- `tab.refresh-interval-seconds` keeps the head in sync when another plugin rewrites the player list.
-- If no skin texture is available from SkinsRestorer or the live profile, AddHeads tries Paper's profile update API and then Mojang profile/session lookup before falling back to the normal vanilla head.
-- If every texture source fails, the client falls back to the default Steve/Alex-style head automatically.
-- Update checks parse version numbers from release names and tags, so custom release titles are fine.
-- `%addhead_tab%` is still available for custom placeholder-based layouts, but it is optional for the default path.
+- The default player-list head path does not require manual placeholder setup.
+- AddHeads is designed to work with any plugin that rewrites chat or player-list names later.
+- `%addhead_tab%` remains available as an optional export format for custom layouts, but it is not required for the default player-list path.
+- `/hd update` queues a download and asks for a chat confirmation (`update`) before the file is copied into `plugins/update`.
 
 ### License
 
-This project is distributed under a custom non-commercial source-available license included in [`LICENSE`](./LICENSE). See [`NOTICE`](./NOTICE) for attribution lines.
+This project is distributed under the custom source-available license included in [`LICENSE`](./LICENSE). See [`NOTICE`](./NOTICE) for attribution lines.
 
 ## Русский
 
-Минимальный плагин для Paper/Purpur, который добавляет головы игроков в чат и отдаёт reusable head placeholders для других плагинов.
+AddHeads — это плагин для Paper/Purpur, который добавляет головы игроков в чат, автоматически подставляет их в список игроков и отдаёт полноценный API для других плагинов.
 
 ### Что делает
 
-AddHeads не берёт на себя форматирование чата.
-Он ждёт, пока другой плагин закончит собирать финальный компонент сообщения, а затем добавляет голову игрока в начало, сохраняя цвета, ссылки, hover- и click-events.
+AddHeads не перехватывает форматирование чата целиком. Он ждёт, пока другой плагин соберёт финальный компонент сообщения, а затем добавляет голову игрока в начало, не ломая цвета, ссылки, hover-события, click-события и остальное оформление.
 
-Для таба, префиксов, скорбордов и похожих интерфейсов AddHeads отдаёт PlaceholderAPI-форматы, а не навязывает один конкретный способ интеграции.
+Для списка игроков AddHeads автоматически добавляет голову через Paper API `playerListName(Component)`. Для стандартного пути никаких ручных placeholder-настроек не требуется.
+
+Кроме этого, плагин отдаёт публичный API и PlaceholderAPI-форматы, чтобы другие плагины могли получать головы, текстуры, разделители и разные экспортные представления напрямую.
 
 ### Возможности
 
-- отображение головы игрока в чате через Adventure components
-- поддержка PlaceholderAPI
-- поддержка SkinsRestorer
+- головы игроков в чате через Adventure components
+- автоматическая подстановка головы в список игроков
+- публичный Bukkit service API
+- PlaceholderAPI с несколькими форматами вывода
 - общий кэш скинов с автообновлением
-- персональные переключатели для чата и TAB
+- поддержка SkinsRestorer
+- fallback через Paper profile и Mojang profile/session lookup
 - локализованное меню настроек
-- переключение языка на лету
-- автоматическое добавление недостающих ключей в конфиг и языковые файлы при reload
-- проверка TAB и админский repair
+- reload конфига и языков на лету
+- автоматическое добавление недостающих ключей в конфиг и языковые файлы
+- персональные переключатели для чата и списка игроков
+- проверка обновлений через GitHub и Modrinth
 
 ### Требования
 
@@ -222,30 +227,96 @@ AddHeads не берёт на себя форматирование чата.
 
 ### Установка
 
-1. Соберите или скачайте `AddHeads-1.0.2.jar`.
-2. Положите его в папку `plugins/` на сервере.
+1. Соберите или скачайте `AddHeads-1.1.0.jar`.
+2. Положите его в папку `plugins/`.
 3. Запустите или перезапустите сервер.
 4. При необходимости отредактируйте `config.yml` и `languages/*.yml`.
 5. После изменений используйте `/hd settings` или `/hd reload`.
+
+### Команды
+
+```txt
+/hd togglechat
+/hd toggletab
+/hd settings
+/hd info
+/hd reload
+/hd update <latest|github|modrinth>
+```
+
+### Права
+
+```txt
+addhead.togglechat
+addhead.toggletab
+addhead.settings
+addhead.reload
+addhead.premium
+```
+
+- `addhead.togglechat` — переключение голов в чате для себя.
+- `addhead.toggletab` — переключение голов в списке игроков для себя.
+- `addhead.settings` — доступ к GUI настроек.
+- `addhead.reload` — доступ к reload.
+- `addhead.premium` — используется, когда `premium.mode=permission` или `premium.mode=auto_permission`.
 
 ### Конфиг
 
 Главный конфиг: [`src/main/resources/config.yml`](./src/main/resources/config.yml)
 
-Доступные настройки:
+Основные настройки:
 
 - `chat`
 - `placeholder`
-- `skin-refresh-interval-seconds`
+- `tab.enabled`
+- `cache-refresh-interval-seconds`
+- `formatting.chat-head-spacing`
+- `formatting.chat-head-shadow`
+- `formatting.tab-head-spacing`
+- `formatting.tab-head-shadow`
 - `language.file`
 - `messages.prefix`
+- `update-check.enabled`
+- `update-check.interval-hours`
 - `premium.*`
 
-При старте и reload плагин сравнивает серверный `config.yml` со встроенным шаблоном и дополняет недостающие ключи, не трогая уже заданные значения.
+Update sources for GitHub and Modrinth are built into the plugin and are not configured in `config.yml`.
+
+При старте и reload плагин автоматически добавляет недостающие ключи из встроенного шаблона, не перезаписывая уже заданные значения.
+
+### Публичный API
+
+AddHeads регистрирует Bukkit service для прямой интеграции:
+
+```java
+import goshkow.addhead.api.AddHeadsAPI;
+import goshkow.addhead.api.AddHeadsProvider;
+import goshkow.addhead.api.HeadFormat;
+import goshkow.addhead.api.HeadRenderTarget;
+
+AddHeadsProvider api = AddHeadsAPI.provider();
+if (api != null) {
+    String signedTag = api.getFormattedHead(player, HeadFormat.SIGNED_TAG, api.getDefaultOptions(HeadRenderTarget.TAB));
+}
+```
+
+Доступные модели API:
+
+- `AddHeadsProvider`
+- `AddHeadsAPI`
+- `HeadFormat`
+- `HeadRenderOptions`
+- `HeadRenderTarget`
+- `SkinTexture`
+
+События API:
+
+- `AddHeadsReloadEvent`
+- `AddHeadsSkinResolvedEvent`
 
 ### PlaceholderAPI
 
-Основные плейсхолдеры:
+Базовые placeholders:
 
 - `%addhead_head%`
 - `%addhead_tab%`
@@ -255,85 +326,49 @@ AddHeads не берёт на себя форматирование чата.
 - `%addhead_skin_ready%`
 - `%addhead_tab_visible%`
 
-Рекомендуемый вариант для TAB:
+Форматные placeholders:
 
-```txt
-%addhead_tab%
-```
+- `%addhead_format_json%`
+- `%addhead_format_signed_tag%`
+- `%addhead_format_texture_tag%`
+- `%addhead_format_id_tag%`
+- `%addhead_format_name_tag%`
+- `%addhead_format_texture_value%`
+- `%addhead_format_texture_signature%`
+- `%addhead_format_texture_hash%`
+- `%addhead_format_signed_texture%`
+- `%addhead_format_separator%`
+- `%addhead_format_skin_ready%`
 
-### Recommended usage:
+Контекстные placeholders:
 
-- перед tab prefix
-- прямо внутри tab prefix
-- внутри префиксов LuckPerms, если целевой плагин поддерживает PlaceholderAPI
+- `%addhead_chat_json%`
+- `%addhead_chat_separator%`
+- `%addhead_tab_signed_tag%`
+- `%addhead_tab_separator%`
+- `%addhead_tab_json%`
 
-### Команды
-
-```txt
-/hd togglechat
-/hd toggletab
-/hd settings
-/hd info
-```
-
-`/hd settings` открывает локализованное GUI для администраторов с правом `addhead.settings`.
-
-Оттуда можно:
-
-- переключать языки из папки `languages/`
-- включать и выключать основные функции
-- менять дефолты premium-режима
-- перезагружать плагин
-- менять интервал обновления скина в секундах
-
-`/hd fixtab` - служебная админ-команда для исправления TAB. Она специально не показывается в публичном usage.
-
-### Права
-
-```txt
-addhead.settings
-addhead.reload
-addhead.premium
-```
-
-- `addhead.settings` позволяет открыть GUI настроек.
-- `addhead.reload` позволяет перезагружать плагин и использовать TAB repair actions.
-- `addhead.premium` используется только когда `premium.mode=permission`.
-
-### Языки
-
-Встроенные языки:
-
-- `en-us`
-- `ru-ru`
-- `es-es`
-- `de-de`
-- `fr-fr`
-- `pt-br`
-- `zh-cn`
-
-Любой файл `*.yml`, который вы положите в `plugins/AddHeads/languages/`, будет автоматически подхвачен и появится в GUI.
-
-Если файл перевода старее текущей версии плагина, недостающие ключи автоматически возьмутся из английского шаблона при reload.
+Формы `chat_*` и `tab_*` используют дефолтные настройки spacing и shadow для соответствующей цели.
 
 ### Источники скинов
 
-AddHeads берёт скины в таком порядке:
+AddHeads берёт текстуры в таком порядке:
 
 1. SkinsRestorer
-2. живой профиль Paper игрока
-3. уже закэшированное значение AddHeads
+2. live Paper player profile
+3. Paper profile update lookup
+4. Mojang profile/session lookup по имени игрока
+5. уже закэшированное значение AddHeads
 
 ### Примечания
 
 - AddHeads не требует resource pack.
-- Дополнительные client mods не нужны.
+- Дополнительные клиентские моды не нужны.
 - Всё работает на vanilla client.
-- AddHeads больше не пытается сам инжектить головы в TAB.
-- Для интеграции с TAB нужно явно вставить placeholder в конфиг TAB.
-- Если TAB не рендерит player head object components, проверьте настройки компонента TAB.
+- Для стандартной подстановки головы в список игроков ничего вручную настраивать не нужно.
+- Плагин рассчитан на работу с любыми другими плагинами, которые форматируют чат или позже переписывают имя игрока в списке.
+- `%addhead_tab%` остаётся как опциональный формат для кастомных раскладок, но для стандартного пути он не обязателен.
 
 ### Лицензия
 
-Проект распространяется под кастомной некоммерческой source-available лицензией, текст которой находится в [`LICENSE`](./LICENSE). Строки авторства указаны в [`NOTICE`](./NOTICE).
-
+Проект распространяется под кастомной source-available лицензией из [`LICENSE`](./LICENSE). Строки атрибуции находятся в [`NOTICE`](./NOTICE).

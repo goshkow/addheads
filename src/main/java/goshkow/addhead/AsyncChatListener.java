@@ -37,7 +37,14 @@ public final class AsyncChatListener implements Listener {
             if (!plugin.shouldRenderChatHeadFor(viewer)) {
                 return rendered;
             }
-            return Utils.prependHead(skinService, rendered, source.getUniqueId(), source.getName(), plugin.isChatHeadSpaceEnabled());
+            return Utils.prependHead(
+                    skinService,
+                    rendered,
+                    source.getUniqueId(),
+                    source.getName(),
+                    plugin.getChatHeadSpacing(),
+                    plugin.isChatHeadShadowEnabled()
+            );
         });
     }
 }

@@ -44,6 +44,11 @@ public final class SettingsMenuListener implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onChat(AsyncChatEvent event) {
         Player player = event.getPlayer();
+        if (plugin.getUpdateCheckerService() != null
+                && plugin.getUpdateCheckerService().confirmPendingDownload(player, PlainTextComponentSerializer.plainText().serialize(event.message()))) {
+            event.setCancelled(true);
+            return;
+        }
         if (!sessions.isPending(player.getUniqueId())) {
             return;
         }
@@ -56,5 +61,8 @@ public final class SettingsMenuListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         sessions.clear(event.getPlayer().getUniqueId());
+        if (plugin.getUpdateCheckerService() != null) {
+            plugin.getUpdateCheckerService().clearPendingDownload(event.getPlayer().getUniqueId());
+        }
     }
 }

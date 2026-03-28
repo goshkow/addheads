@@ -38,6 +38,14 @@ public final class PlayerPreferenceService {
         return config.contains(path(playerId, "tab"));
     }
 
+    public boolean hasPremiumState(UUID playerId) {
+        return config.contains(path(playerId, "premium"));
+    }
+
+    public boolean isPremiumState(UUID playerId) {
+        return config.getBoolean(path(playerId, "premium"), false);
+    }
+
     public boolean isChatEnabled(UUID playerId) {
         return config.getBoolean(path(playerId, "chat"), true);
     }
@@ -70,6 +78,16 @@ public final class PlayerPreferenceService {
         config.set(path(playerId, "tab"), next);
         save();
         return next;
+    }
+
+    public void setPremiumState(UUID playerId, boolean premium) {
+        config.set(path(playerId, "premium"), premium);
+        save();
+    }
+
+    public void clearPremiumState(UUID playerId) {
+        config.set(path(playerId, "premium"), null);
+        save();
     }
 
     private String path(UUID playerId, String key) {

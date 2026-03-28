@@ -36,18 +36,6 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (args.length == 1 && args[0].equalsIgnoreCase("fixtab")) {
-            if (!sender.hasPermission("addhead.reload")) {
-                sender.sendMessage(plugin.message("command.no-permission"));
-                return true;
-            }
-
-            AddHeads.TabFixResult result = plugin.fixTabMiniMessageSetting();
-            sender.sendMessage(plugin.message(result.messageKey(), result.placeholders()));
-            playCommandSound(sender);
-            return true;
-        }
-
         if (args.length == 1 && args[0].equalsIgnoreCase("togglechat")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage(plugin.message("command.players-only"));
@@ -117,7 +105,11 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
 
-            plugin.getUpdateCheckerService().downloadUpdateAsync(sender, args[1]);
+            if (sender instanceof Player player) {
+                plugin.getUpdateCheckerService().requestDownloadConfirmation(player, args[1]);
+            } else {
+                plugin.getUpdateCheckerService().downloadUpdateAsync(sender, args[1]);
+            }
             playCommandSound(sender);
             return true;
         }
@@ -153,6 +145,9 @@ public final class AddHeadsCommand implements CommandExecutor, TabCompleter {
             }
             if (sender.hasPermission("addhead.reload")) {
                 addSuggestion(suggestions, "reload", prefix);
+            }
+            if (sender.hasPermission("addhead.reload")) {
+                addSuggestion(suggestions, "update", prefix);
             }
             return suggestions;
         }

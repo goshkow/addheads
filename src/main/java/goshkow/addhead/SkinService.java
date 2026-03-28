@@ -6,8 +6,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -36,13 +34,13 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class SkinService {
 
-    private final Plugin plugin;
+    private final AddHeads plugin;
     private final ConcurrentMap<UUID, Utils.TextureData> cache = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, CompletableFuture<Utils.TextureData>> pendingMojangLookups = new ConcurrentHashMap<>();
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private int refreshTaskId = -1;
 
-    public SkinService(Plugin plugin) {
+    public SkinService(AddHeads plugin) {
         this.plugin = plugin;
     }
 
@@ -91,6 +89,7 @@ public final class SkinService {
         } else {
             Utils.TextureData existing = cache.put(playerId, data);
             if (!Objects.equals(existing, data)) {
+                notifySkinResolved(playerId, playerName, data);
                 notifyTabProfileUpdated(playerId);
             }
         }
@@ -107,6 +106,7 @@ public final class SkinService {
         for (Player player : Bukkit.getOnlinePlayers()) {
             refresh(player.getUniqueId(), player.getName());
         }
+        plugin.refreshAllTabListNames();
     }
 
     public Utils.TextureData getTexture(UUID playerId, String playerName) {
@@ -121,14 +121,20 @@ public final class SkinService {
         if (Bukkit.isPrimaryThread()) {
             Utils.TextureData resolved = resolveTexture(playerId, playerName);
             if (resolved != null) {
-                cache.put(playerId, resolved);
+                Utils.TextureData existing = cache.put(playerId, resolved);
+                if (!Objects.equals(existing, resolved)) {
+                    notifySkinResolved(playerId, playerName, resolved);
+                }
             }
             return resolved;
         }
 
         Utils.TextureData asyncResolved = resolveTextureWithoutLivePlayer(playerId, playerName);
         if (asyncResolved != null) {
-            cache.put(playerId, asyncResolved);
+            Utils.TextureData existing = cache.put(playerId, asyncResolved);
+            if (!Objects.equals(existing, asyncResolved)) {
+                notifySkinResolved(playerId, playerName, asyncResolved);
+            }
             return asyncResolved;
         }
 
@@ -170,7 +176,10 @@ public final class SkinService {
                     if (throwable != null || textureData == null || textureData.value() == null || textureData.value().isBlank()) {
                         return;
                     }
-                    cache.put(playerId, textureData);
+                    Utils.TextureData existing = cache.put(playerId, textureData);
+                    if (!Objects.equals(existing, textureData)) {
+                        notifySkinResolved(playerId, playerName, textureData);
+                    }
                     notifyTabProfileUpdated(playerId);
                 }));
     }
@@ -193,7 +202,10 @@ public final class SkinService {
                         return;
                     }
 
-                    cache.put(playerId, textureData);
+                    Utils.TextureData existing = cache.put(playerId, textureData);
+                    if (!Objects.equals(existing, textureData)) {
+                        notifySkinResolved(playerId, playerName, textureData);
+                    }
                     notifyTabProfileUpdated(playerId);
                 });
             } catch (RuntimeException exception) {
@@ -208,7 +220,7 @@ public final class SkinService {
             HttpRequest profileRequest = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.mojang.com/users/profiles/minecraft/" + encodedName))
                     .GET()
-                    .header("User-Agent", "AddHeads/1.0.3")
+                    .header("User-Agent", "AddHeads/" + plugin.getDescription().getVersion())
                     .build();
 
             HttpResponse<String> profileResponse = httpClient.send(profileRequest, HttpResponse.BodyHandlers.ofString());
@@ -230,7 +242,7 @@ public final class SkinService {
             HttpRequest textureRequest = HttpRequest.newBuilder()
                     .uri(URI.create("https://sessionserver.mojang.com/session/minecraft/profile/" + id + "?unsigned=false"))
                     .GET()
-                    .header("User-Agent", "AddHeads/1.0.3")
+                    .header("User-Agent", "AddHeads/" + plugin.getDescription().getVersion())
                     .build();
 
             HttpResponse<String> textureResponse = httpClient.send(textureRequest, HttpResponse.BodyHandlers.ofString());
@@ -356,16 +368,16 @@ public final class SkinService {
     }
 
     private void notifyTabProfileUpdated(UUID playerId) {
-        if (!(plugin instanceof AddHeads addHeads)) {
-            return;
-        }
-
         Bukkit.getScheduler().runTask(plugin, () -> {
             Player player = Bukkit.getPlayer(playerId);
             if (player != null) {
-                addHeads.refreshTabListName(player);
+                plugin.refreshTabListName(player);
             }
         });
+    }
+
+    private void notifySkinResolved(UUID playerId, String playerName, Utils.TextureData textureData) {
+        plugin.fireSkinResolvedEvent(playerId, playerName, textureData);
     }
 
     private String invokeString(Object target, String methodName) {

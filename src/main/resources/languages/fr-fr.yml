@@ -25,10 +25,10 @@ settings:
     premium-mode: "&fDétection premium"
     premium-chat: "&fTêtes premium dans le chat"
     premium-tab: "&fTêtes premium dans le TAB"
-    skin-refresh: "&fIntervalle de rafraîchissement"
+    cache-refresh: "&fIntervalle de cache"
     reload: "&fRecharger le plugin"
   prompt:
-    skin-refresh: "&7Entrez l'intervalle de rafraîchissement en secondes dans le chat."
+    cache-refresh: "&7Entrez l'intervalle de rafraîchissement en secondes dans le chat."
     cancel: "&7Cliquez ici pour annuler."
   feedback:
     language-changed: "&7Langue changée en &f{value}&7."
@@ -45,7 +45,7 @@ settings:
     premium-chat-disabled: "&7Têtes premium dans le chat désactivées."
     premium-tab-enabled: "&7Têtes premium dans le TAB activées."
     premium-tab-disabled: "&7Têtes premium dans le TAB désactivées."
-    skin-refresh-set: "&7Intervalle de rafraîchissement du skin défini à &f{value} &7secondes."
+    cache-refresh-set: "&7Intervalle de cache défini à &f{value} &7secondes."
     reloaded: "&7Plugin rechargé."
     cancelled: "&7Annulé."
     invalid-number: "&7Veuillez entrer un nombre entier."

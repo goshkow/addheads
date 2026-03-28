@@ -25,10 +25,10 @@ settings:
     premium-mode: "&fDetección premium"
     premium-chat: "&fCabezas premium en chat"
     premium-tab: "&fCabezas premium en TAB"
-    skin-refresh: "&fIntervalo de actualización"
+    cache-refresh: "&fIntervalo de caché"
     reload: "&fRecargar plugin"
   prompt:
-    skin-refresh: "&7Escribe el intervalo de actualización en segundos en el chat."
+    cache-refresh: "&7Escribe el intervalo de actualización en segundos en el chat."
     cancel: "&7Haz clic aquí para cancelar."
   feedback:
     language-changed: "&7Idioma cambiado a &f{value}&7."
@@ -45,7 +45,7 @@ settings:
     premium-chat-disabled: "&7Cabezas premium en chat desactivadas."
     premium-tab-enabled: "&7Cabezas premium en TAB activadas."
     premium-tab-disabled: "&7Cabezas premium en TAB desactivadas."
-    skin-refresh-set: "&7Intervalo de actualización de skin establecido en &f{value} &7segundos."
+    cache-refresh-set: "&7Intervalo de caché establecido en &f{value} &7segundos."
     reloaded: "&7Plugin recargado."
     cancelled: "&7Cancelado."
     invalid-number: "&7Introduce un número entero."

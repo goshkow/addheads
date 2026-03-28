@@ -6,7 +6,7 @@
 
     <groupId>goshkow</groupId>
     <artifactId>addheads</artifactId>
-    <version>1.0.2</version>
+    <version>1.1.0</version>
     <name>AddHeads</name>
     <description>A plugin that adds player heads to chat and provides reusable placeholders</description>
 

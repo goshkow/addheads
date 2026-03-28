@@ -35,6 +35,6 @@ public final class SettingsSessionService {
     }
 
     public enum PendingInput {
-        SKIN_REFRESH_SECONDS
+        CACHE_REFRESH_SECONDS
     }
 }

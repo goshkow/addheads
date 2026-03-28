@@ -1,9 +1,13 @@
 package goshkow.addhead;
 
+import goshkow.addhead.api.HeadFormat;
+import goshkow.addhead.api.HeadRenderOptions;
+import goshkow.addhead.api.HeadRenderTarget;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
-import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
+
+import java.util.Optional;
 
 /**
  * PlaceholderAPI bridge for AddHeads.
@@ -63,8 +67,11 @@ public final class HeadPlaceholderExpansion extends PlaceholderExpansion {
             if (player == null) {
                 return "";
             }
-            return GsonComponentSerializer.gson().serialize(
-                    Utils.createHeadComponent(plugin.getSkinService(), player.getUniqueId(), player.getName())
+            return plugin.getApiProvider().getFormattedHead(
+                    player.getUniqueId(),
+                    player.getName(),
+                    HeadFormat.JSON_COMPONENT,
+                    plugin.getApiProvider().getDefaultOptions(HeadRenderTarget.CHAT)
             );
         }
 
@@ -72,30 +79,43 @@ public final class HeadPlaceholderExpansion extends PlaceholderExpansion {
             if (!plugin.shouldRenderTabHeadFor(offlinePlayer.getUniqueId())) {
                 return "";
             }
-
-            String signedTexture = Utils.buildTabSignedTexture(plugin.getSkinService(), offlinePlayer.getUniqueId(), offlinePlayer.getName());
-            if (!signedTexture.isBlank()) {
-                return plugin.isTabHeadSpaceEnabled() ? signedTexture + " " : signedTexture;
+            String signedTag = plugin.getApiProvider().getFormattedHead(
+                    offlinePlayer.getUniqueId(),
+                    offlinePlayer.getName(),
+                    HeadFormat.SIGNED_TAG,
+                    plugin.getApiProvider().getDefaultOptions(HeadRenderTarget.TAB)
+            );
+            if (signedTag.isBlank()) {
+                return "";
             }
-            return "";
+            return signedTag + plugin.getApiProvider().getSeparatorText(plugin.getApiProvider().getDefaultOptions(HeadRenderTarget.TAB));
         }
 
         if (identifier.equals("texture_value")) {
-            Utils.TextureData texture = Utils.getCurrentTextureData(plugin.getSkinService(), offlinePlayer.getUniqueId(), offlinePlayer.getName());
-            return texture != null ? texture.value() : "";
+            return plugin.getApiProvider().getFormattedHead(
+                    offlinePlayer.getUniqueId(),
+                    offlinePlayer.getName(),
+                    HeadFormat.TEXTURE_VALUE,
+                    plugin.getApiProvider().getDefaultOptions(HeadRenderTarget.CUSTOM)
+            );
         }
 
         if (identifier.equals("texture_signature")) {
-            Utils.TextureData texture = Utils.getCurrentTextureData(plugin.getSkinService(), offlinePlayer.getUniqueId(), offlinePlayer.getName());
-            return texture != null && texture.signature() != null ? texture.signature() : "";
+            return plugin.getApiProvider().getFormattedHead(
+                    offlinePlayer.getUniqueId(),
+                    offlinePlayer.getName(),
+                    HeadFormat.TEXTURE_SIGNATURE,
+                    plugin.getApiProvider().getDefaultOptions(HeadRenderTarget.CUSTOM)
+            );
         }
 
         if (identifier.equals("texture_hash")) {
-            String tabTexture = Utils.buildTabTexture(plugin.getSkinService(), offlinePlayer.getUniqueId(), offlinePlayer.getName());
-            if (tabTexture.startsWith("<head:texture:") && tabTexture.endsWith(">")) {
-                return tabTexture.substring("<head:texture:".length(), tabTexture.length() - 1);
-            }
-            return "";
+            return plugin.getApiProvider().getFormattedHead(
+                    offlinePlayer.getUniqueId(),
+                    offlinePlayer.getName(),
+                    HeadFormat.TEXTURE_HASH,
+                    plugin.getApiProvider().getDefaultOptions(HeadRenderTarget.CUSTOM)
+            );
         }
 
         if (identifier.equals("tab_visible")) {
@@ -103,11 +123,39 @@ public final class HeadPlaceholderExpansion extends PlaceholderExpansion {
         }
 
         if (identifier.equals("skin_ready")) {
-            return Utils.getCurrentTextureData(plugin.getSkinService(), offlinePlayer.getUniqueId(), offlinePlayer.getName()) != null
-                    ? "true"
-                    : "false";
+            return plugin.getApiProvider().getFormattedHead(
+                    offlinePlayer.getUniqueId(),
+                    offlinePlayer.getName(),
+                    HeadFormat.SKIN_READY,
+                    plugin.getApiProvider().getDefaultOptions(HeadRenderTarget.CUSTOM)
+            );
+        }
+
+        if (identifier.startsWith("format_")) {
+            return formatPlaceholder(offlinePlayer, identifier.substring("format_".length()), HeadRenderTarget.CUSTOM);
+        }
+
+        if (identifier.startsWith("chat_")) {
+            return formatPlaceholder(offlinePlayer, identifier.substring("chat_".length()), HeadRenderTarget.CHAT);
+        }
+
+        if (identifier.startsWith("tab_")) {
+            if (!plugin.shouldRenderTabHeadFor(offlinePlayer.getUniqueId())) {
+                return "";
+            }
+            return formatPlaceholder(offlinePlayer, identifier.substring("tab_".length()), HeadRenderTarget.TAB);
         }
 
         return null;
+    }
+
+    private String formatPlaceholder(OfflinePlayer player, String formatKey, HeadRenderTarget target) {
+        Optional<HeadFormat> format = HeadFormat.fromKey(formatKey);
+        if (format.isEmpty()) {
+            return null;
+        }
+
+        HeadRenderOptions options = plugin.getApiProvider().getDefaultOptions(target);
+        return plugin.getApiProvider().getFormattedHead(player.getUniqueId(), player.getName(), format.get(), options);
     }
 }

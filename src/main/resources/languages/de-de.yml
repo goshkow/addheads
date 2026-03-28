@@ -25,10 +25,10 @@ settings:
     premium-mode: "&fPremium-Erkennung"
     premium-chat: "&fPremium-Chat-Köpfe"
     premium-tab: "&fPremium-TAB-Köpfe"
-    skin-refresh: "&fSkin-Refresh-Intervall"
+    cache-refresh: "&fCache-Refresh-Intervall"
     reload: "&fPlugin neu laden"
   prompt:
-    skin-refresh: "&7Gib das Aktualisierungsintervall in Sekunden in den Chat ein."
+    cache-refresh: "&7Gib das Aktualisierungsintervall in Sekunden in den Chat ein."
     cancel: "&7Klicke hier zum Abbrechen."
   feedback:
     language-changed: "&7Sprache gewechselt zu &f{value}&7."
@@ -45,7 +45,7 @@ settings:
     premium-chat-disabled: "&7Premium-Chat-Köpfe deaktiviert."
     premium-tab-enabled: "&7Premium-TAB-Köpfe aktiviert."
     premium-tab-disabled: "&7Premium-TAB-Köpfe deaktiviert."
-    skin-refresh-set: "&7Skin-Refresh-Intervall auf &f{value} &7Sekunden gesetzt."
+    cache-refresh-set: "&7Cache-Refresh-Intervall auf &f{value} &7Sekunden gesetzt."
     reloaded: "&7Plugin neu geladen."
     cancelled: "&7Abgebrochen."
     invalid-number: "&7Bitte eine ganze Zahl eingeben."

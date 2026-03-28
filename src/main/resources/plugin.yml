@@ -1,10 +1,10 @@
 name: AddHeads
 main: goshkow.addhead.AddHeads
-version: 1.0.2
+version: 1.1.0
 api-version: "1.21"
 description: |
   AddHeads
-  A plugin that adds player heads to chat and prepends them to the in-game player list name.
+  A plugin that adds player heads to chat, the in-game player list, and exposes a reusable head API.
   Author: goshkow (c) 2026
   Works on Purpur/Paper 1.21.11+.
 softdepend: [PlaceholderAPI, SkinsRestorer]
@@ -12,7 +12,7 @@ commands:
   addhead:
     description: AddHeads command
     aliases: [hd]
-    usage: /hd <togglechat|toggletab|settings|info>
+    usage: /hd <togglechat|toggletab|settings|info|reload|update>
 permissions:
   addhead.settings:
     description: Allows opening AddHeads settings GUI
@@ -27,5 +27,5 @@ permissions:
     description: Allows toggling your own tab heads
     default: true
   addhead.premium:
-    description: Used only when premium.mode=permission
+    description: Used when premium.mode checks permissions
     default: false

@@ -46,9 +46,15 @@ import java.util.regex.Pattern;
 public final class UpdateCheckerService {
 
     private static final Pattern VERSION_PATTERN = Pattern.compile("(?i)(?:\\bv)?(\\d+(?:\\.\\d+)*)(?:[-+][0-9A-Za-z.-]+)?");
+    private static final String GITHUB_REPOSITORY = "goshkow/addheads";
+    private static final String GITHUB_LATEST_URL = "https://github.com/goshkow/addheads/releases/latest";
+    private static final String MODRINTH_PROJECT = "addheads";
+    private static final String MODRINTH_LATEST_URL = "https://modrinth.com/plugin/addheads/versions";
+    private static final String UPDATE_CONFIRMATION = "update";
 
     private final AddHeads plugin;
     private final HttpClient httpClient;
+    private final ConcurrentHashMap<UUID, String> pendingDownloads = new ConcurrentHashMap<>();
     private volatile BukkitTask task;
     private volatile UpdateState currentState;
 
@@ -87,6 +93,7 @@ public final class UpdateCheckerService {
             task.cancel();
             task = null;
         }
+        pendingDownloads.clear();
         currentState = null;
     }
 
@@ -140,8 +147,51 @@ public final class UpdateCheckerService {
             return;
         }
 
-        if (state.markNotified(player.getUniqueId())) {
-            player.sendMessage(buildMessage(state));
+        player.sendMessage(buildMessage(state));
+    }
+
+    public void requestDownloadConfirmation(Player player, String sourceKey) {
+        if (player == null || !plugin.shouldReceiveUpdateNotifications(player)) {
+            return;
+        }
+
+        UpdateState state = currentState;
+        if (state == null || !state.isActive()) {
+            player.sendMessage(Component.text("No update is currently available.", NamedTextColor.GRAY));
+            return;
+        }
+
+        UpdateCandidate candidate = state.selectCandidate(UpdateSource.fromKey(sourceKey));
+        if (candidate == null) {
+            player.sendMessage(Component.text("No downloadable update was found.", NamedTextColor.GRAY));
+            return;
+        }
+
+        pendingDownloads.put(player.getUniqueId(), candidate.sourceKey());
+        player.sendMessage(Component.text()
+                .append(Component.text("Type ", NamedTextColor.GRAY))
+                .append(Component.text("update", NamedTextColor.WHITE))
+                .append(Component.text(" in chat to confirm the download.", NamedTextColor.GRAY))
+                .build());
+    }
+
+    public boolean confirmPendingDownload(Player player, String message) {
+        if (player == null || message == null || !message.trim().equalsIgnoreCase(UPDATE_CONFIRMATION)) {
+            return false;
+        }
+
+        String sourceKey = pendingDownloads.remove(player.getUniqueId());
+        if (sourceKey == null) {
+            return false;
+        }
+
+        downloadUpdateAsync(player, sourceKey);
+        return true;
+    }
+
+    public void clearPendingDownload(UUID playerId) {
+        if (playerId != null) {
+            pendingDownloads.remove(playerId);
         }
     }
 
@@ -201,12 +251,7 @@ public final class UpdateCheckerService {
     }
 
     private UpdateCandidate fetchGitHubUpdate(VersionNumber currentVersion) throws IOException, InterruptedException {
-        String repository = normalizeRepository(plugin.getConfig().getString("update-check.github.repository", "goshkow/addheads"));
-        if (repository.isBlank()) {
-            return null;
-        }
-
-        URI uri = URI.create("https://api.github.com/repos/" + repository + "/releases?per_page=100");
+        URI uri = URI.create("https://api.github.com/repos/" + GITHUB_REPOSITORY + "/releases?per_page=100");
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(7))
                 .header("Accept", "application/vnd.github+json")
@@ -250,7 +295,12 @@ public final class UpdateCheckerService {
 
             String pageUrl = stringValue(release, "html_url");
             if (pageUrl.isBlank()) {
-                pageUrl = "https://github.com/" + repository + "/releases/latest";
+                String tagName = stringValue(release, "tag_name");
+                if (!tagName.isBlank()) {
+                    pageUrl = "https://github.com/" + GITHUB_REPOSITORY + "/releases/tag/" + tagName;
+                } else {
+                    pageUrl = GITHUB_LATEST_URL;
+                }
             }
 
             JsonObject asset = selectReleaseAsset(release);
@@ -263,7 +313,7 @@ public final class UpdateCheckerService {
                 continue;
             }
 
-            UpdateCandidate candidate = new UpdateCandidate("GitHub", candidateVersion.get(), pageUrl, downloadUrl, fileName);
+            UpdateCandidate candidate = new UpdateCandidate("github", "GitHub", candidateVersion.get(), pageUrl, downloadUrl, fileName);
             if (best == null || candidate.version().compareTo(best.version()) > 0) {
                 best = candidate;
             }
@@ -273,12 +323,7 @@ public final class UpdateCheckerService {
     }
 
     private UpdateCandidate fetchModrinthUpdate(VersionNumber currentVersion) throws IOException, InterruptedException {
-        String project = normalizeModrinthProject(plugin.getConfig().getString("update-check.modrinth.project", "addheads"));
-        if (project == null || project.isBlank()) {
-            return null;
-        }
-
-        URI uri = URI.create("https://api.modrinth.com/v2/project/" + URLEncoder.encode(project, StandardCharsets.UTF_8) + "/version");
+        URI uri = URI.create("https://api.modrinth.com/v2/project/" + URLEncoder.encode(MODRINTH_PROJECT, StandardCharsets.UTF_8) + "/version");
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(7))
                 .header("Accept", "application/json")
@@ -328,10 +373,17 @@ public final class UpdateCheckerService {
                 continue;
             }
 
+            String versionNumber = stringValue(version, "version_number");
+            String pageUrl = "https://modrinth.com/plugin/" + MODRINTH_PROJECT + "/version/" + versionNumber;
+            if (versionNumber.isBlank()) {
+                pageUrl = MODRINTH_LATEST_URL;
+            }
+
             UpdateCandidate candidate = new UpdateCandidate(
+                    "modrinth",
                     "Modrinth",
                     candidateVersion.get(),
-                    plugin.getConfig().getString("update-check.modrinth.url", "https://modrinth.com/plugin/addheads/versions"),
+                    pageUrl,
                     downloadUrl,
                     fileName
             );
@@ -359,51 +411,6 @@ public final class UpdateCheckerService {
         }
         return versions.stream()
                 .max(Comparator.comparingInt(VersionNumber::partCount).thenComparing(Comparator.naturalOrder()));
-    }
-
-    private String normalizeRepository(String repository) {
-        if (repository == null) {
-            return "";
-        }
-        String value = repository.trim();
-        for (String prefix : List.of("https://github.com/", "http://github.com/", "github.com/")) {
-            if (value.startsWith(prefix)) {
-                value = value.substring(prefix.length());
-            }
-        }
-        int releasesIndex = value.indexOf("/releases/");
-        if (releasesIndex >= 0) {
-            value = value.substring(0, releasesIndex);
-        }
-        String[] segments = value.split("/");
-        if (segments.length >= 2) {
-            value = segments[0] + "/" + segments[1];
-        }
-        if (value.endsWith("/")) {
-            value = value.substring(0, value.length() - 1);
-        }
-        return value;
-    }
-
-    private String normalizeModrinthProject(String project) {
-        if (project == null) {
-            return "";
-        }
-
-        String value = project.trim();
-        for (String prefix : List.of("https://modrinth.com/plugin/", "http://modrinth.com/plugin/", "modrinth.com/plugin/")) {
-            if (value.startsWith(prefix)) {
-                value = value.substring(prefix.length());
-            }
-        }
-        int slashIndex = value.indexOf('/');
-        if (slashIndex >= 0) {
-            value = value.substring(0, slashIndex);
-        }
-        if (value.endsWith("/")) {
-            value = value.substring(0, value.length() - 1);
-        }
-        return value;
     }
 
     private String stringValue(JsonObject object, String key) {
@@ -526,11 +533,11 @@ public final class UpdateCheckerService {
         Component buttons = Component.text()
                 .append(button("Download latest", "/hd update latest"))
                 .append(Component.space())
-                .append(button("Open GitHub", state.github() != null ? state.github().url() : plugin.getConfig().getString("update-check.github.url", "https://github.com/goshkow/addheads/releases/latest")))
+                .append(button("Open GitHub", state.github() != null ? state.github().url() : GITHUB_LATEST_URL))
                 .append(Component.space())
                 .append(Component.text("|", NamedTextColor.DARK_GRAY))
                 .append(Component.space())
-                .append(button("Open Modrinth", state.modrinth() != null ? state.modrinth().url() : plugin.getConfig().getString("update-check.modrinth.url", "https://modrinth.com/plugin/addheads/versions")))
+                .append(button("Open Modrinth", state.modrinth() != null ? state.modrinth().url() : MODRINTH_LATEST_URL))
                 .build();
 
         return Component.text()
@@ -548,7 +555,7 @@ public final class UpdateCheckerService {
                 .hoverEvent(HoverEvent.showText(Component.text(url.startsWith("/") ? "Download and queue the update" : "Open the release page", NamedTextColor.WHITE)));
     }
 
-    private record UpdateCandidate(String sourceName, VersionNumber version, String url, String downloadUrl, String fileName) {
+    private record UpdateCandidate(String sourceKey, String sourceName, VersionNumber version, String url, String downloadUrl, String fileName) {
     }
 
     private static final class UpdateState {
@@ -591,8 +598,8 @@ public final class UpdateCheckerService {
         }
 
         private String signature() {
-            String githubSignature = github == null ? "-" : github.version().display() + "@" + github.url() + "@" + github.downloadUrl();
-            String modrinthSignature = modrinth == null ? "-" : modrinth.version().display() + "@" + modrinth.url() + "@" + modrinth.downloadUrl();
+            String githubSignature = github == null ? "-" : github.sourceKey() + "@" + github.version().display() + "@" + github.url() + "@" + github.downloadUrl();
+            String modrinthSignature = modrinth == null ? "-" : modrinth.sourceKey() + "@" + modrinth.version().display() + "@" + modrinth.url() + "@" + modrinth.downloadUrl();
             return githubSignature + "|" + modrinthSignature;
         }
 

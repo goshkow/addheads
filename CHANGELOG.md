@@ -1,15 +1,20 @@
 # Changelog
 
-## 1.0.2
+## 1.1.0
 
-- Reworked tab head insertion so AddHeads now prepends the head directly to the in-game player list name.
-- The default tab path no longer requires additional TAB configuration or placeholder setup.
-- Tab head insertion is now universal and works with vanilla player lists as well as tab-related plugins that rewrite the list name later.
-- Added a dedicated `tab.enabled` switch and `tab.refresh-interval-seconds` setting for the automatic player-list head path.
-- Fixed duplicate tab heads during plugin reload by restoring the raw player-list name before reapplying the head.
-- Updated tab visibility handling so the player-side toggle now removes or restores the actual tab head, not only placeholder output.
-- Added additional skin resolution fallbacks so tab heads can still resolve more reliably when the primary source does not return a texture.
-- Updated README, config notes, and release metadata to match the new placeholder-free default tab flow.
+- Added a public AddHeads API with service registration through Bukkit `ServicesManager`.
+- Added reusable API models for render targets, render options, output formats, and skin textures.
+- Added API events for plugin reloads and resolved skin updates.
+- Added richer export formats for both the public API and PlaceholderAPI.
+- Added format-aware placeholders such as `format_*`, `chat_*`, and `tab_*`.
+- Reworked spacing after heads into configurable spacing counts instead of simple on/off toggles.
+- Added separate spacing and shadow defaults for chat heads and player-list heads.
+- Unified the cache refresh cycle so one configurable interval now drives skin cache refresh and player-list head reapplication.
+- Added a confirmation flow for update downloads, with chat confirmation before queueing the file into `plugins/update`.
+- Moved GitHub and Modrinth release sources into the plugin itself and left only the update-check enable/interval settings in config.
+- Reworked premium detection to support `auto`, `auto_permission`, and `permission` modes without plugin-specific premium hooks.
+- Preserved premium player preferences across joins and only apply premium defaults when a player transitions into premium state.
+- Updated documentation to describe AddHeads as a universal head provider for chat, player lists, placeholders, and third-party integrations.
 
 ## 1.0.1
 
@@ -31,4 +36,3 @@
 - Added shared skin caching with automatic refresh.
 - Added localized settings GUI and language switching.
 - Added premium-aware defaults and personal toggles.
-- Added TAB compatibility checks and repair command.

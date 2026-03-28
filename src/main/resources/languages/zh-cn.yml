@@ -25,10 +25,10 @@ settings:
     premium-mode: "&fPremium 检测"
     premium-chat: "&fPremium 聊天头颅"
     premium-tab: "&fPremium TAB 头颅"
-    skin-refresh: "&f皮肤刷新间隔"
+    cache-refresh: "&f缓存刷新间隔"
     reload: "&f重载插件"
   prompt:
-    skin-refresh: "&7请在聊天中输入刷新间隔（秒）。"
+    cache-refresh: "&7请在聊天中输入刷新间隔（秒）。"
     cancel: "&7点击此处取消。"
   feedback:
     language-changed: "&7语言已切换为 &f{value}&7。"
@@ -45,7 +45,7 @@ settings:
     premium-chat-disabled: "&7Premium 聊天头颅已禁用。"
     premium-tab-enabled: "&7Premium TAB 头颅已启用。"
     premium-tab-disabled: "&7Premium TAB 头颅已禁用。"
-    skin-refresh-set: "&7皮肤刷新间隔已设置为 &f{value} &7秒。"
+    cache-refresh-set: "&7缓存刷新间隔已设置为 &f{value} &7秒。"
     reloaded: "&7插件已重载。"
     cancelled: "&7已取消。"
     invalid-number: "&7请输入整数。"

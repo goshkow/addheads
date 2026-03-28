@@ -1,8 +1,12 @@
 package goshkow.addhead;
 
 import com.destroystokyo.paper.profile.PlayerProfile;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.ShadowColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.text.object.PlayerHeadObjectContents;
 import org.bukkit.Bukkit;
@@ -28,6 +32,8 @@ import java.util.regex.Pattern;
  */
 public final class Utils {
 
+    private static final Key DEFAULT_FONT = Key.key("minecraft", "default");
+    private static final String HEAD_SEPARATOR = "\u200C";
     private static final Pattern TEXTURE_URL_PATTERN =
             Pattern.compile("https?://textures\\.minecraft\\.net/texture/([A-Za-z0-9]+)");
 
@@ -35,32 +41,53 @@ public final class Utils {
     }
 
     public static Component prependHead(SkinService skinService, Component message, UUID playerId, String playerName) {
-        return prependHead(skinService, message, playerId, playerName, true);
+        return prependHead(skinService, message, playerId, playerName, 2, true);
     }
 
     public static Component prependHead(SkinService skinService, Component message, UUID playerId, String playerName, boolean appendSpace) {
+        return prependHead(skinService, message, playerId, playerName, appendSpace ? 2 : 0, true);
+    }
+
+    public static Component prependHead(SkinService skinService, Component message, UUID playerId, String playerName, int separatorCount, boolean shadowEnabled) {
         Component builder = Component.empty()
-                .append(createHeadComponent(skinService, playerId, playerName));
-        if (appendSpace) {
-            builder = builder.append(Component.space());
+                .append(createHeadComponent(skinService, playerId, playerName, shadowEnabled));
+        if (separatorCount > 0) {
+            builder = builder.append(headSeparator(separatorCount));
+        }
+        return builder.append(message);
+    }
+
+    public static Component prependTabHead(SkinService skinService, Component message, UUID playerId, String playerName, int separatorCount, boolean shadowEnabled) {
+        Component builder = Component.empty()
+                .append(createTabHeadComponent(skinService, playerId, playerName, shadowEnabled));
+        if (separatorCount > 0) {
+            builder = builder.append(tabSeparator(separatorCount));
         }
         return builder.append(message);
     }
 
     public static Component prependHead(Component message, UUID playerId, String playerName) {
-        return prependHead(message, playerId, playerName, true);
+        return prependHead(message, playerId, playerName, 2, true);
     }
 
     public static Component prependHead(Component message, UUID playerId, String playerName, boolean appendSpace) {
+        return prependHead(message, playerId, playerName, appendSpace ? 2 : 0, true);
+    }
+
+    public static Component prependHead(Component message, UUID playerId, String playerName, int separatorCount, boolean shadowEnabled) {
         Component builder = Component.empty()
-                .append(createHeadComponent(playerId, playerName));
-        if (appendSpace) {
-            builder = builder.append(Component.space());
+                .append(createHeadComponent(playerId, playerName, shadowEnabled));
+        if (separatorCount > 0) {
+            builder = builder.append(headSeparator(separatorCount));
         }
         return builder.append(message);
     }
 
     public static Component createHeadComponent(SkinService skinService, UUID playerId, String playerName) {
+        return createHeadComponent(skinService, playerId, playerName, true);
+    }
+
+    public static Component createHeadComponent(SkinService skinService, UUID playerId, String playerName, boolean shadowEnabled) {
         String resolvedName = resolveName(playerId, playerName);
         PlayerHeadObjectContents.Builder builder = ObjectContents.playerHead()
                 .name(resolvedName)
@@ -77,11 +104,18 @@ public final class Utils {
             ));
         }
 
-        return Component.object(builder.build())
-                .hoverEvent(HoverEvent.showText(Component.text(resolvedName)));
+        return applyHeadStyle(Component.object(builder.build()), resolvedName, shadowEnabled);
+    }
+
+    public static Component createTabHeadComponent(SkinService skinService, UUID playerId, String playerName, boolean shadowEnabled) {
+        return resetTabHeadStyle(createHeadComponent(skinService, playerId, playerName, shadowEnabled));
     }
 
     public static Component createHeadComponent(UUID playerId, String playerName) {
+        return createHeadComponent(playerId, playerName, true);
+    }
+
+    public static Component createHeadComponent(UUID playerId, String playerName, boolean shadowEnabled) {
         String resolvedName = resolveName(playerId, playerName);
 
         PlayerHeadObjectContents.Builder builder = ObjectContents.playerHead()
@@ -97,8 +131,7 @@ public final class Utils {
             applyResolvedProperties(builder, properties);
         }
 
-        return Component.object(builder.build())
-                .hoverEvent(HoverEvent.showText(Component.text(resolvedName)));
+        return applyHeadStyle(Component.object(builder.build()), resolvedName, shadowEnabled);
     }
 
     public static TextureData getCurrentTextureData(SkinService skinService, UUID playerId, String playerName) {
@@ -167,6 +200,48 @@ public final class Utils {
             return "";
         }
         return texture.value + ";" + texture.signature;
+    }
+
+    private static Component applyHeadStyle(Component component, String resolvedName, boolean shadowEnabled) {
+        Component styled = component.hoverEvent(HoverEvent.showText(Component.text(resolvedName)));
+        if (!shadowEnabled) {
+            styled = styled.shadowColor(ShadowColor.none());
+        }
+        return styled;
+    }
+
+    private static Component resetTabHeadStyle(Component component) {
+        return component
+                .font(DEFAULT_FONT)
+                .colorIfAbsent(NamedTextColor.WHITE)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, false)
+                .decoration(TextDecoration.OBFUSCATED, false)
+                .decoration(TextDecoration.STRIKETHROUGH, false)
+                .decoration(TextDecoration.UNDERLINED, false);
+    }
+
+    public static String buildHeadSeparatorText(int separatorCount) {
+        if (separatorCount <= 0) {
+            return "";
+        }
+        return HEAD_SEPARATOR.repeat(separatorCount);
+    }
+
+    private static Component tabSeparator(int separatorCount) {
+        return headSeparator(separatorCount);
+    }
+
+    private static Component headSeparator(int separatorCount) {
+        return Component.text(buildHeadSeparatorText(separatorCount))
+                .font(DEFAULT_FONT)
+                .color(NamedTextColor.WHITE)
+                .shadowColor(ShadowColor.none())
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true)
+                .decoration(TextDecoration.OBFUSCATED, false)
+                .decoration(TextDecoration.STRIKETHROUGH, false)
+                .decoration(TextDecoration.UNDERLINED, false);
     }
 
     private static void applyResolvedProperties(PlayerHeadObjectContents.Builder builder, Collection<ResolvedProperty> properties) {

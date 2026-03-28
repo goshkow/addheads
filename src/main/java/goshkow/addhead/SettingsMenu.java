@@ -149,7 +149,7 @@ public final class SettingsMenu {
         }
 
         String input = rawInput == null ? "" : rawInput.trim();
-        if (pending == SettingsSessionService.PendingInput.SKIN_REFRESH_SECONDS) {
+        if (pending == SettingsSessionService.PendingInput.CACHE_REFRESH_SECONDS) {
             long seconds;
             try {
                 String normalized = extractInteger(input);
@@ -172,10 +172,10 @@ public final class SettingsMenu {
             }
 
             FileConfiguration config = plugin.getConfig();
-            config.set("skin-refresh-interval-seconds", seconds);
+            config.set("cache-refresh-interval-seconds", seconds);
             plugin.saveConfig();
             plugin.restartSkinService();
-            player.sendMessage(plugin.message("settings.feedback.skin-refresh-set", java.util.Map.of("value", String.valueOf(seconds))));
+            player.sendMessage(plugin.message("settings.feedback.cache-refresh-set", java.util.Map.of("value", String.valueOf(seconds))));
             playMenuSound(player);
             reopenLater(player);
         }
@@ -201,13 +201,14 @@ public final class SettingsMenu {
 
     private void cyclePremiumMode(Player player) {
         String current = plugin.getPremiumMode().toLowerCase(Locale.ROOT);
-        List<String> modes = List.of("auto", "permission", "limboauth");
+        List<String> modes = List.of("auto", "auto_permission", "permission");
         int index = modes.indexOf(current);
         String next = modes.get(index >= 0 ? (index + 1) % modes.size() : 0);
 
         plugin.getConfig().set("premium.mode", next);
         plugin.saveConfig();
-        player.sendMessage(plugin.message("settings.feedback.premium-mode", java.util.Map.of("value", next)));
+        Bukkit.getOnlinePlayers().forEach(plugin::syncPremiumDefaults);
+        player.sendMessage(plugin.message("settings.feedback.premium-mode", java.util.Map.of("value", premiumModeLabel(next))));
         playMenuSound(player);
         reopenLater(player);
     }
@@ -217,6 +218,9 @@ public final class SettingsMenu {
         boolean next = !config.getBoolean(path, false);
         config.set(path, next);
         plugin.saveConfig();
+        if ("premium.enabled".equals(path) && next) {
+            Bukkit.getOnlinePlayers().forEach(plugin::syncPremiumDefaults);
+        }
         boolean enabled = trueMeansEnabled ? next : !next;
         player.sendMessage(plugin.message(enabled ? enabledKey : disabledKey));
         playMenuSound(player);
@@ -224,9 +228,9 @@ public final class SettingsMenu {
     }
 
     private void requestSkinRefreshInput(Player player) {
-        sessions.begin(player.getUniqueId(), SettingsSessionService.PendingInput.SKIN_REFRESH_SECONDS);
+        sessions.begin(player.getUniqueId(), SettingsSessionService.PendingInput.CACHE_REFRESH_SECONDS);
         player.closeInventory();
-        player.sendMessage(plugin.message("settings.prompt.skin-refresh"));
+        player.sendMessage(plugin.message("settings.prompt.cache-refresh"));
         sendCancelPrompt(player);
         playMenuSound(player);
     }
@@ -279,7 +283,7 @@ public final class SettingsMenu {
 
         boolean premiumModeActive = premiumFeatureEnabled;
         List<String> premiumModeLore = new ArrayList<>();
-        premiumModeLore.add(plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", plugin.getPremiumMode())));
+        premiumModeLore.add(plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", premiumModeLabel(plugin.getPremiumMode()))));
         premiumModeLore.add(plugin.getLanguageManager().get("settings.lore.click-cycle"));
         if (!premiumModeActive) {
             premiumModeLore.add(plugin.getLanguageManager().get("settings.lore.premium-hidden"));
@@ -294,8 +298,8 @@ public final class SettingsMenu {
         inventory.setItem(SLOT_PREMIUM_TAB, item(premiumTabEnabled ? ENABLED_MATERIAL : DISABLED_MATERIAL,
                 premiumLabel(plugin.getLanguageManager().get("settings.menu.premium-tab"), premiumFeatureEnabled), premiumToggleLore(premiumTabEnabled, premiumFeatureEnabled)));
 
-        inventory.setItem(SLOT_REFRESH, item(Material.CLOCK, plugin.getLanguageManager().get("settings.menu.skin-refresh"), List.of(
-                plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", String.valueOf(plugin.getSkinRefreshIntervalSeconds()))),
+        inventory.setItem(SLOT_REFRESH, item(Material.CLOCK, plugin.getLanguageManager().get("settings.menu.cache-refresh"), List.of(
+                plugin.getLanguageManager().get("settings.lore.current", java.util.Map.of("value", String.valueOf(plugin.getCacheRefreshIntervalSeconds()))),
                 plugin.getLanguageManager().get("settings.lore.click-enter")
         )));
 
@@ -355,6 +359,18 @@ public final class SettingsMenu {
 
     private String booleanState(boolean value) {
         return value ? plugin.getLanguageManager().get("settings.state.enabled") : plugin.getLanguageManager().get("settings.state.disabled");
+    }
+
+    private String premiumModeLabel(String mode) {
+        if (mode == null) {
+            return "";
+        }
+        return switch (mode.toLowerCase(Locale.ROOT)) {
+            case "auto" -> "Auto";
+            case "permission" -> "Permission only";
+            case "auto_permission" -> "Auto + permission";
+            default -> mode;
+        };
     }
 
     public void cancelPendingInput(Player player) {
