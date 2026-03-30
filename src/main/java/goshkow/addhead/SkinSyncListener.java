@@ -23,11 +23,17 @@ public final class SkinSyncListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         plugin.captureTabBaseName(event.getPlayer());
         plugin.syncPremiumDefaults(event.getPlayer());
+        plugin.refreshTabView(event.getPlayer());
         plugin.refreshTabListName(event.getPlayer());
+        plugin.refreshTabViewLater(event.getPlayer(), 10L);
         plugin.refreshTabListNameLater(event.getPlayer(), 10L);
+        plugin.refreshTabViewLater(event.getPlayer(), 40L);
         plugin.refreshTabListNameLater(event.getPlayer(), 40L);
+        plugin.refreshTabViewLater(event.getPlayer(), 100L);
         plugin.refreshTabListNameLater(event.getPlayer(), 100L);
+        plugin.refreshTabViewLater(event.getPlayer(), 200L);
         plugin.refreshTabListNameLater(event.getPlayer(), 200L);
+        plugin.refreshTabViewLater(event.getPlayer(), 400L);
         plugin.refreshTabListNameLater(event.getPlayer(), 400L);
         skinService.refresh(event.getPlayer().getUniqueId(), event.getPlayer().getName());
         skinService.refreshLater(event.getPlayer().getUniqueId(), event.getPlayer().getName(), 10L);

@@ -41,6 +41,8 @@ public final class AddHeads extends JavaPlugin {
     private SettingsMenu settingsMenu;
     private UpdateCheckerService updateCheckerService;
     private AddHeadsApiProvider apiProvider;
+    private ProtocolLibTabViewHook protocolLibTabViewHook;
+    private TabApiBridge tabApiBridge;
     private final ConcurrentMap<UUID, Component> tabBaseNames = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Component> tabRenderedNames = new ConcurrentHashMap<>();
     private NamespacedKey tabBaseNameKey;
@@ -69,6 +71,15 @@ public final class AddHeads extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new AdminNoticeListener(this), this);
         getServer().getPluginManager().registerEvents(new SettingsMenuListener(this, settingsMenu, settingsSessionService), this);
         skinService.start(getCacheRefreshIntervalTicks());
+        protocolLibTabViewHook = new ProtocolLibTabViewHook(this);
+        if (!protocolLibTabViewHook.start()) {
+            protocolLibTabViewHook = null;
+        }
+        boolean tabReloadNeeded = synchronizeTabPluginConfig();
+        startTabApiBridge();
+        if (tabReloadNeeded) {
+            scheduleTabReload();
+        }
         updateCheckerService = new UpdateCheckerService(this);
         updateCheckerService.start();
 
@@ -105,6 +116,14 @@ public final class AddHeads extends JavaPlugin {
         if (updateCheckerService != null) {
             updateCheckerService.stop();
         }
+        if (protocolLibTabViewHook != null) {
+            protocolLibTabViewHook.stop();
+            protocolLibTabViewHook = null;
+        }
+        if (tabApiBridge != null) {
+            tabApiBridge.stop();
+            tabApiBridge = null;
+        }
         restoreAllTabListNames();
         if (preferenceService != null) {
             preferenceService.save();
@@ -129,6 +148,13 @@ public final class AddHeads extends JavaPlugin {
         restartSkinService();
         if (updateCheckerService != null) {
             updateCheckerService.restart();
+        }
+        boolean tabReloadNeeded = synchronizeTabPluginConfig();
+        if (tabApiBridge == null) {
+            startTabApiBridge();
+        }
+        if (tabReloadNeeded) {
+            scheduleTabReload();
         }
         for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
             captureTabBaseName(player);
@@ -271,6 +297,10 @@ public final class AddHeads extends JavaPlugin {
         return apiProvider;
     }
 
+    public TabApiBridge getTabApiBridge() {
+        return tabApiBridge;
+    }
+
     public String message(String key) {
         return prefix() + languageManager.get(key);
     }
@@ -308,7 +338,7 @@ public final class AddHeads extends JavaPlugin {
             return;
         }
 
-        Component base = currentTabBaseName(player);
+        Component base = resolveCurrentTabBaseName(player);
         tabBaseNames.put(playerId, base);
         writeStoredTabBaseName(player, base);
     }
@@ -316,6 +346,10 @@ public final class AddHeads extends JavaPlugin {
     public void forgetTabBaseName(UUID playerId) {
         if (playerId != null) {
             tabBaseNames.remove(playerId);
+            tabRenderedNames.remove(playerId);
+            if (protocolLibTabViewHook != null) {
+                protocolLibTabViewHook.forgetPlayer(playerId);
+            }
         }
     }
 
@@ -323,12 +357,20 @@ public final class AddHeads extends JavaPlugin {
         if (player == null) {
             return;
         }
+        if (tabApiBridge != null && tabApiBridge.isManagingTabFormatting()) {
+            tabApiBridge.refreshTarget(player);
+            return;
+        }
+        if (isPerViewerTabRenderingEnabled()) {
+            protocolLibTabViewHook.refreshEntryForAllViewers(player);
+            return;
+        }
         Component base = tabBaseNames.computeIfAbsent(player.getUniqueId(), ignored -> {
             Component stored = readStoredTabBaseName(player);
             if (stored != null) {
                 return stored;
             }
-            Component current = currentTabBaseName(player);
+            Component current = resolveCurrentTabBaseName(player);
             writeStoredTabBaseName(player, current);
             return current;
         });
@@ -366,7 +408,37 @@ public final class AddHeads extends JavaPlugin {
         Bukkit.getScheduler().runTaskLater(this, () -> refreshTabListName(player), Math.max(0L, delayTicks));
     }
 
+    public void refreshTabView(org.bukkit.entity.Player viewer) {
+        if (viewer == null) {
+            return;
+        }
+        if (tabApiBridge != null && tabApiBridge.isManagingTabFormatting()) {
+            tabApiBridge.refreshViewer(viewer);
+            return;
+        }
+        if (isPerViewerTabRenderingEnabled()) {
+            protocolLibTabViewHook.refreshViewer(viewer);
+            return;
+        }
+        refreshTabListName(viewer);
+    }
+
+    public void refreshTabViewLater(org.bukkit.entity.Player viewer, long delayTicks) {
+        if (viewer == null) {
+            return;
+        }
+        Bukkit.getScheduler().runTaskLater(this, () -> refreshTabView(viewer), Math.max(0L, delayTicks));
+    }
+
     public void refreshAllTabListNames() {
+        if (tabApiBridge != null && tabApiBridge.isManagingTabFormatting()) {
+            tabApiBridge.refreshAll();
+            return;
+        }
+        if (isPerViewerTabRenderingEnabled()) {
+            protocolLibTabViewHook.refreshAllViewers();
+            return;
+        }
         for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
             refreshTabListName(player);
         }
@@ -381,6 +453,9 @@ public final class AddHeads extends JavaPlugin {
     public void restoreTabListName(org.bukkit.entity.Player player) {
         if (player == null) {
             return;
+        }
+        if (tabApiBridge != null && tabApiBridge.isManagingTabFormatting()) {
+            tabApiBridge.clearTarget(player);
         }
         Component base = tabBaseNames.computeIfAbsent(player.getUniqueId(), ignored -> {
             Component stored = readStoredTabBaseName(player);
@@ -409,13 +484,121 @@ public final class AddHeads extends JavaPlugin {
         return player != null && (player.isOp() || player.hasPermission("addhead.settings") || player.hasPermission("addhead.reload"));
     }
 
+    public boolean isTabPluginPresent() {
+        return getServer().getPluginManager().getPlugin("TAB") != null;
+    }
+
+    public boolean isTabApiCompatibilityEnabled() {
+        return tabApiBridge != null && tabApiBridge.isAvailable();
+    }
+
+    public boolean isTabFormattingCompatibilityEnabled() {
+        return tabApiBridge != null && tabApiBridge.isManagingTabFormatting();
+    }
+
+    private File getTabConfigFile() {
+        return new File(new File(getDataFolder().getParentFile(), "TAB"), "config.yml");
+    }
+
+    private void startTabApiBridge() {
+        if (!isTabFeatureEnabled()) {
+            if (tabApiBridge != null) {
+                tabApiBridge.stop();
+                tabApiBridge = null;
+            }
+            return;
+        }
+
+        TabApiBridge bridge = new TabApiBridge(this);
+        if (bridge.start()) {
+            tabApiBridge = bridge;
+            return;
+        }
+
+        tabApiBridge = null;
+        if (!isTabPluginPresent()) {
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            if (tabApiBridge != null || !isTabPluginPresent()) {
+                return;
+            }
+            TabApiBridge delayedBridge = new TabApiBridge(this);
+            if (delayedBridge.start()) {
+                tabApiBridge = delayedBridge;
+                refreshAllTabListNames();
+            }
+        }, 40L);
+    }
+
+    private void scheduleTabReload() {
+        if (!isTabPluginPresent()) {
+            return;
+        }
+        Bukkit.getScheduler().runTaskLater(this, () ->
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "tab reload"), 20L);
+    }
+
+    public boolean isTabListFormattingLikelyEnabled() {
+        if (!isTabPluginPresent()) {
+            return false;
+        }
+
+        File tabConfigFile = getTabConfigFile();
+        if (!tabConfigFile.isFile()) {
+            return true;
+        }
+
+        YamlConfiguration tabConfig = YamlConfiguration.loadConfiguration(tabConfigFile);
+        return tabConfig.getBoolean("tablist-name-formatting.enabled", true);
+    }
+
+    public boolean synchronizeTabPluginConfig() {
+        if (!isTabPluginPresent() || !isTabFeatureEnabled()) {
+            return false;
+        }
+
+        File tabConfigFile = getTabConfigFile();
+        if (!tabConfigFile.isFile()) {
+            return false;
+        }
+
+        YamlConfiguration tabConfig = YamlConfiguration.loadConfiguration(tabConfigFile);
+        boolean changed = false;
+
+        if (tabConfig.getBoolean("components.minimessage-support", true)) {
+            tabConfig.set("components.minimessage-support", false);
+            changed = true;
+        }
+
+        boolean disableShadowForHeads = !isTabHeadShadowEnabled();
+        if (tabConfig.getBoolean("components.disable-shadow-for-heads", false) != disableShadowForHeads) {
+            tabConfig.set("components.disable-shadow-for-heads", disableShadowForHeads);
+            changed = true;
+        }
+
+        if (!changed) {
+            return false;
+        }
+
+        try {
+            tabConfig.save(tabConfigFile);
+            getLogger().info("Synchronized TAB component settings for AddHeads.");
+            return true;
+        } catch (IOException exception) {
+            getLogger().warning("Failed to update TAB config for AddHeads compatibility: " + exception.getMessage());
+            return false;
+        }
+    }
+
     public boolean toggleChatFor(org.bukkit.entity.Player player) {
         return preferenceService.toggleChat(player.getUniqueId(), isChatEnabledFor(player));
     }
 
     public boolean toggleTabFor(org.bukkit.entity.Player player) {
         boolean enabled = preferenceService.toggleTab(player.getUniqueId(), isTabEnabledFor(player));
-        refreshTabListName(player);
+        refreshTabView(player);
         return enabled;
     }
 
@@ -475,8 +658,12 @@ public final class AddHeads extends JavaPlugin {
         if (!hadState || !previous) {
             preferenceService.setChat(playerId, !getConfig().getBoolean("premium.disable-chat-heads", false));
             preferenceService.setTab(playerId, !getConfig().getBoolean("premium.disable-tab-heads", false));
-            refreshTabListName(player);
+            refreshTabView(player);
         }
+    }
+
+    public boolean isPerViewerTabRenderingEnabled() {
+        return protocolLibTabViewHook != null;
     }
 
     private boolean isPremiumPlayer(org.bukkit.entity.Player player) {
@@ -512,6 +699,27 @@ public final class AddHeads extends JavaPlugin {
     private Component currentTabBaseName(org.bukkit.entity.Player player) {
         Component name = player.playerListName();
         return name != null ? name : Component.text(player.getName());
+    }
+
+    private Component resolveCurrentTabBaseName(org.bukkit.entity.Player player) {
+        Component current = currentTabBaseName(player);
+        Component rendered = tabRenderedNames.get(player.getUniqueId());
+        if (rendered != null && rendered.equals(current)) {
+            Component storedBase = readStoredTabBaseName(player);
+            if (storedBase != null) {
+                return storedBase;
+            }
+        }
+
+        Component storedRendered = readStoredTabRenderedName(player);
+        if (storedRendered != null && storedRendered.equals(current)) {
+            Component storedBase = readStoredTabBaseName(player);
+            if (storedBase != null) {
+                return storedBase;
+            }
+        }
+
+        return current;
     }
 
     private Component readStoredTabBaseName(org.bukkit.entity.Player player) {
@@ -556,6 +764,21 @@ public final class AddHeads extends JavaPlugin {
             );
         } catch (RuntimeException ignored) {
             // Persistent storage is best-effort; in-memory fallback still works.
+        }
+    }
+
+    private Component readStoredTabRenderedName(org.bukkit.entity.Player player) {
+        if (tabRenderedNameKey == null || player == null) {
+            return null;
+        }
+        String json = player.getPersistentDataContainer().get(tabRenderedNameKey, PersistentDataType.STRING);
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return GsonComponentSerializer.gson().deserialize(json);
+        } catch (RuntimeException exception) {
+            return null;
         }
     }
 

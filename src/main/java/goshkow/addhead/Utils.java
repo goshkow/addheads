@@ -228,6 +228,13 @@ public final class Utils {
         return HEAD_SEPARATOR.repeat(separatorCount);
     }
 
+    public static String buildTabHeadSeparatorMarkup(int separatorCount) {
+        if (separatorCount <= 0) {
+            return "";
+        }
+        return "&l" + HEAD_SEPARATOR.repeat(separatorCount) + "&r";
+    }
+
     private static Component tabSeparator(int separatorCount) {
         return headSeparator(separatorCount);
     }

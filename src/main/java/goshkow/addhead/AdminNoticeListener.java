@@ -29,6 +29,11 @@ public final class AdminNoticeListener implements Listener {
             }
 
             plugin.getUpdateCheckerService().notifyPlayerIfPending(event.getPlayer());
+
+            if (plugin.isTabListFormattingLikelyEnabled() && !plugin.isTabFormattingCompatibilityEnabled()) {
+                event.getPlayer().sendMessage(plugin.message("TAB plugin detected with tablist-name-formatting.enabled=true. This mode can block AddHeads from adding heads over formatted tab names."));
+                event.getPlayer().sendMessage(plugin.message("If heads still do not appear, restart the server so TAB API compatibility can initialize, or disable TAB's tablist-name-formatting."));
+            }
         }, 40L);
     }
 }

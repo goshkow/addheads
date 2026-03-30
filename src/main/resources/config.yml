@@ -52,6 +52,7 @@ premium:
 # - formatting.* controls the spacing amount and shadow applied to built-in chat and player-list heads.
 # - %addhead_head% is for chat and component-aware plugins.
 # - %addhead_tab% is optional and mainly useful for custom PlaceholderAPI-based layouts.
-# - The default player-list head path does not require placeholders; it uses Paper's playerListName(Component) API.
+# - The default player-list head path does not require placeholders; it prefers ProtocolLib viewer rendering and falls back to Paper's playerListName(Component) API.
+# - If TAB is installed and tab.enabled is true, AddHeads switches to TAB's own API path automatically instead of fighting TAB's display-name guard.
 # - Missing config keys are backfilled from the bundled template on reload.
 # - Update notices are sent in English to admins with addhead.settings or addhead.reload.
