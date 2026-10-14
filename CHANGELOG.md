@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.8
+
+- Fixed a potential server watchdog freeze caused by synchronous skin resolution during player-list head refreshes.
+- Moved skin refresh cycles to asynchronous scheduling to prevent slow skin lookups from blocking the main server thread.
+- Prevented overlapping refresh cycles with a reentrancy guard.
+- Avoided synchronous skin resolution on the main thread when the skin cache is cold, allowing cached data or fallback rendering while the cache is populated asynchronously.
+- Added connection and request timeouts to AddHeads' Mojang profile and session server HTTP requests.
+- Ensured player-list name refreshes are scheduled on the main server thread.
+- Added automated threading tests for skin refresh scheduling, cache behavior, and player-list refresh handling.
+
 ## 1.2.0
 
 - Added automatic native `TAB` API integration. If `TAB` is installed and player-list heads are enabled, AddHeads now switches to the built-in `TAB` compatibility path automatically with no extra AddHeads-side toggle.
