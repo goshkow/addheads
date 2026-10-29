@@ -53,6 +53,14 @@ public final class ProtocolLibTabViewHook {
     }
 
     public boolean start() {
+        if (Schedulers.isFolia()) {
+            // ProtocolLib does not support Folia's regionised threads, so the
+            // packet path is skipped there and AddHeads uses the per-player
+            // player-list API instead (issue #7).
+            plugin.getLogger().info("Folia detected. ProtocolLib viewer rendering is not supported, using the per-player player-list path instead.");
+            return false;
+        }
+
         if (Bukkit.getPluginManager().getPlugin("ProtocolLib") == null) {
             plugin.getLogger().warning("ProtocolLib not found. Falling back to global player-list head rendering.");
             return false;

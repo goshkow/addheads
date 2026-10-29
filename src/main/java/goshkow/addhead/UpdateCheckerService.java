@@ -13,7 +13,6 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitTask;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,7 +54,7 @@ public final class UpdateCheckerService {
     private final AddHeads plugin;
     private final HttpClient httpClient;
     private final ConcurrentHashMap<UUID, String> pendingDownloads = new ConcurrentHashMap<>();
-    private volatile BukkitTask task;
+    private volatile Schedulers.Handle task;
     private volatile UpdateState currentState;
 
     public UpdateCheckerService(AddHeads plugin) {
@@ -73,8 +72,8 @@ public final class UpdateCheckerService {
         }
 
         long period = Math.max(20L, plugin.getUpdateCheckIntervalTicks());
-        task = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::checkSafely, 40L, period);
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::checkSafely);
+        task = Schedulers.runAsyncTimer(plugin, this::checkSafely, 40L, period);
+        Schedulers.runAsync(plugin, this::checkSafely);
     }
 
     public synchronized void restart() {
@@ -84,8 +83,8 @@ public final class UpdateCheckerService {
         }
 
         long period = Math.max(20L, plugin.getUpdateCheckIntervalTicks());
-        task = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::checkSafely, 40L, period);
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::checkSafely);
+        task = Schedulers.runAsyncTimer(plugin, this::checkSafely, 40L, period);
+        Schedulers.runAsync(plugin, this::checkSafely);
     }
 
     public synchronized void stop() {
@@ -200,7 +199,7 @@ public final class UpdateCheckerService {
             return;
         }
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Schedulers.runAsync(plugin, () -> {
             try {
                 UpdateState state = currentState;
                 if (state == null || !state.isActive()) {
@@ -231,7 +230,7 @@ public final class UpdateCheckerService {
     }
 
     private void broadcastToEligiblePlayers(UpdateState state) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        Schedulers.runGlobal(plugin, () -> {
             if (currentState != state) {
                 return;
             }
@@ -505,7 +504,7 @@ public final class UpdateCheckerService {
 
     private void reply(CommandSender sender, Component message) {
         String plain = PlainTextComponentSerializer.plainText().serialize(message);
-        Bukkit.getScheduler().runTask(plugin, () -> sender.sendMessage(plain));
+        Schedulers.runGlobal(plugin, () -> sender.sendMessage(plain));
     }
 
     private Component buildMessage(UpdateState state) {

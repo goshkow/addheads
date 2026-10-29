@@ -43,7 +43,7 @@ public final class SkinService {
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5L))
             .build();
-    private int refreshTaskId = -1;
+    private Schedulers.Handle refreshTask = Schedulers.Handle.NONE;
 
     public SkinService(AddHeads plugin) {
         this.plugin = plugin;
@@ -53,23 +53,16 @@ public final class SkinService {
         stop();
         if (refreshTicks > 0L) {
             // Skin resolution blocks on SkinsRestorer/Mojang HTTPS lookups, so
-            // the refresh cycle must run off the server thread. Main-thread-only
-            // work (tab list names) is dispatched back inside refreshOnlinePlayers().
-            refreshTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(
-                    plugin,
-                    this::refreshOnlinePlayers,
-                    refreshTicks,
-                    refreshTicks
-            ).getTaskId();
+            // the refresh cycle must run off the ticking threads. Global work
+            // (tab list names) is dispatched back inside refreshOnlinePlayers().
+            refreshTask = Schedulers.runAsyncTimer(plugin, this::refreshOnlinePlayers, refreshTicks, refreshTicks);
         }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::refreshOnlinePlayers);
+        Schedulers.runAsync(plugin, this::refreshOnlinePlayers);
     }
 
     public void stop() {
-        if (refreshTaskId != -1) {
-            Bukkit.getScheduler().cancelTask(refreshTaskId);
-            refreshTaskId = -1;
-        }
+        refreshTask.cancel();
+        refreshTask = Schedulers.Handle.NONE;
     }
 
     public void clear() {
@@ -87,15 +80,13 @@ public final class SkinService {
             return;
         }
 
-        if (Bukkit.isPrimaryThread()) {
-            // Resolution blocks on SkinsRestorer/Mojang HTTPS lookups; never
-            // let that happen on the server thread.
-            Bukkit.getScheduler().runTaskAsynchronously(
-                    plugin,
-                    () -> refresh(playerId, playerName));
-            return;
-        }
+        // Resolution blocks on SkinsRestorer/Mojang HTTPS lookups, so the
+        // public entry point always defers the work to an async thread. On
+        // Paper that is the async pool, on Folia the async scheduler.
+        Schedulers.runAsync(plugin, () -> refreshNow(playerId, playerName));
+    }
 
+    private void refreshNow(UUID playerId, String playerName) {
         Utils.TextureData data = resolveTexture(playerId, playerName);
         if (data == null) {
             if (cache.remove(playerId) != null) {
@@ -116,7 +107,7 @@ public final class SkinService {
         if (playerId == null) {
             return;
         }
-        Bukkit.getScheduler().runTaskLater(plugin, () -> refresh(playerId, playerName), Math.max(0L, delayTicks));
+        Schedulers.runAsyncLater(plugin, () -> refreshNow(playerId, playerName), delayTicks);
     }
 
     public void refreshOnlinePlayers() {
@@ -127,12 +118,13 @@ public final class SkinService {
         }
         try {
             for (Player player : Bukkit.getOnlinePlayers()) {
-                refresh(player.getUniqueId(), player.getName());
+                // Already async: resolve inline instead of queueing another task.
+                refreshNow(player.getUniqueId(), player.getName());
             }
         } finally {
             refreshCycleRunning.set(false);
         }
-        Bukkit.getScheduler().runTask(plugin, plugin::refreshAllTabListNames);
+        Schedulers.runGlobal(plugin, plugin::refreshAllTabListNames);
     }
 
     public Utils.TextureData getTexture(UUID playerId, String playerName) {
@@ -144,25 +136,11 @@ public final class SkinService {
             return cached;
         }
 
-        if (Bukkit.isPrimaryThread()) {
-            // Cold cache: resolving here would block the server thread on
-            // SkinsRestorer/Mojang HTTPS lookups. Return null (renderers fall
-            // back to a name-based lookup) and warm the cache asynchronously.
-            Bukkit.getScheduler().runTaskAsynchronously(
-                    plugin,
-                    () -> refresh(playerId, playerName));
-            return null;
-        }
-
-        Utils.TextureData asyncResolved = resolveTextureWithoutLivePlayer(playerId, playerName);
-        if (asyncResolved != null) {
-            Utils.TextureData existing = cache.put(playerId, asyncResolved);
-            if (!Objects.equals(existing, asyncResolved)) {
-                notifySkinResolved(playerId, playerName, asyncResolved);
-            }
-            return asyncResolved;
-        }
-
+        // Cold cache: resolving here would block the calling ticking thread
+        // (the server thread on Paper, a region thread on Folia) on
+        // SkinsRestorer/Mojang HTTPS lookups. Renderers fall back to a
+        // name-based lookup while the cache is warmed asynchronously.
+        Schedulers.runAsync(plugin, () -> refreshNow(playerId, playerName));
         return null;
     }
 
@@ -178,15 +156,6 @@ public final class SkinService {
             return toTextureData(liveProfileProperties);
         }
 
-        return null;
-    }
-
-    private Utils.TextureData resolveTextureWithoutLivePlayer(UUID playerId, String playerName) {
-        String resolvedName = Utils.resolveName(playerId, playerName);
-        List<ResolvedProperty> skinsRestorerProperties = getSkinsRestorerProperties(playerId, resolvedName);
-        if (!skinsRestorerProperties.isEmpty()) {
-            return toTextureData(skinsRestorerProperties);
-        }
         return null;
     }
 
@@ -214,7 +183,7 @@ public final class SkinService {
             return;
         }
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Schedulers.runAsync(plugin, () -> {
             try {
                 PlayerProfile profile = Bukkit.createProfileExact(playerId, playerName);
                 profile.update().whenComplete((updatedProfile, throwable) -> {
@@ -395,12 +364,12 @@ public final class SkinService {
     }
 
     private void notifyTabProfileUpdated(UUID playerId) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null) {
-                plugin.refreshTabListName(player);
-            }
-        });
+        Player player = Bukkit.getPlayer(playerId);
+        if (player == null) {
+            return;
+        }
+        // Player-list writes must happen on the ticking thread that owns the player.
+        Schedulers.runFor(plugin, player, () -> plugin.refreshTabListName(player));
     }
 
     private void notifySkinResolved(UUID playerId, String playerName, Utils.TextureData textureData) {

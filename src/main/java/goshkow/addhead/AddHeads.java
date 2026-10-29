@@ -357,6 +357,12 @@ public final class AddHeads extends JavaPlugin {
         if (player == null) {
             return;
         }
+        if (Schedulers.isFolia() && !Bukkit.isOwnedByCurrentRegion(player)) {
+            // Folia only allows a player's player-list entry to be written from
+            // the region thread that owns that player.
+            Schedulers.runFor(this, player, () -> refreshTabListName(player));
+            return;
+        }
         if (tabApiBridge != null && tabApiBridge.isManagingTabFormatting()) {
             tabApiBridge.refreshTarget(player);
             return;
@@ -405,7 +411,7 @@ public final class AddHeads extends JavaPlugin {
         if (player == null) {
             return;
         }
-        Bukkit.getScheduler().runTaskLater(this, () -> refreshTabListName(player), Math.max(0L, delayTicks));
+        Schedulers.runGlobalLater(this, () -> refreshTabListName(player), Math.max(0L, delayTicks));
     }
 
     public void refreshTabView(org.bukkit.entity.Player viewer) {
@@ -427,7 +433,7 @@ public final class AddHeads extends JavaPlugin {
         if (viewer == null) {
             return;
         }
-        Bukkit.getScheduler().runTaskLater(this, () -> refreshTabView(viewer), Math.max(0L, delayTicks));
+        Schedulers.runGlobalLater(this, () -> refreshTabView(viewer), Math.max(0L, delayTicks));
     }
 
     public void refreshAllTabListNames() {
@@ -440,7 +446,8 @@ public final class AddHeads extends JavaPlugin {
             return;
         }
         for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
-            refreshTabListName(player);
+            // Each player-list name is written on the thread that owns the entity.
+            Schedulers.runFor(this, player, () -> refreshTabListName(player));
         }
     }
 
@@ -520,7 +527,7 @@ public final class AddHeads extends JavaPlugin {
             return;
         }
 
-        Bukkit.getScheduler().runTaskLater(this, () -> {
+        Schedulers.runGlobalLater(this, () -> {
             if (tabApiBridge != null || !isTabPluginPresent()) {
                 return;
             }
@@ -536,7 +543,7 @@ public final class AddHeads extends JavaPlugin {
         if (!isTabPluginPresent()) {
             return;
         }
-        Bukkit.getScheduler().runTaskLater(this, () ->
+        Schedulers.runGlobalLater(this, () ->
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "tab reload"), 20L);
     }
 
@@ -567,9 +574,12 @@ public final class AddHeads extends JavaPlugin {
         YamlConfiguration tabConfig = YamlConfiguration.loadConfiguration(tabConfigFile);
         boolean changed = false;
 
-        if (tabConfig.getBoolean("components.minimessage-support", true)) {
-            tabConfig.set("components.minimessage-support", false);
-            changed = true;
+        // AddHeads heads are rendered with TAB's own syntax (<head:UUID>,
+        // <head_texture:HASH>), which both of TAB's parsers understand, so the
+        // plugin no longer forces components.minimessage-support to false. The
+        // server owner's TAB parser mode is left exactly as configured. See #6.
+        if (!tabConfig.getBoolean("components.minimessage-support", true)) {
+            getLogger().info("TAB MiniMessage support is disabled in TAB's config.yml; AddHeads works with both of TAB's parsers and leaves that setting untouched.");
         }
 
         boolean disableShadowForHeads = !isTabHeadShadowEnabled();
@@ -821,7 +831,7 @@ public final class AddHeads extends JavaPlugin {
             return;
         }
         SkinTexture texture = new SkinTexture(textureData.value(), textureData.signature());
-        Bukkit.getScheduler().runTask(this, () ->
+        Schedulers.runGlobal(this, () ->
                 Bukkit.getPluginManager().callEvent(new AddHeadsSkinResolvedEvent(playerId, playerName, texture))
         );
     }

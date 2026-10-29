@@ -18,7 +18,9 @@ public final class AdminNoticeListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        // Runs on the joining player's thread, which is the only place where
+        // that player may be messaged on Folia.
+        Schedulers.runForLater(plugin, event.getPlayer(), () -> {
             if (!event.getPlayer().isOnline()) {
                 return;
             }

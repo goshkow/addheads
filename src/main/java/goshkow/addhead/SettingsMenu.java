@@ -48,11 +48,18 @@ public final class SettingsMenu {
     }
 
     public void open(Player player) {
+        if (player == null) {
+            return;
+        }
+        if (Schedulers.isFolia() && !Bukkit.isOwnedByCurrentRegion(player)) {
+            Schedulers.runFor(plugin, player, () -> open(player));
+            return;
+        }
         player.openInventory(build(player));
     }
 
     public void reopenLater(Player player) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        Schedulers.runFor(plugin, player, () -> {
             if (player.isOnline()) {
                 open(player);
             }

@@ -15,7 +15,6 @@ import org.mockito.MockedStatic;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -27,13 +26,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Verifies that AddHeads never performs skin resolution (which blocks on
- * SkinsRestorer/Mojang HTTPS lookups) on the main server thread.
+ * Verifies that AddHeads never resolves skins (which blocks on
+ * SkinsRestorer/Mojang HTTPS lookups) on a ticking thread, and that player-list
+ * refreshes are dispatched back to the global thread through
+ * {@link Schedulers}.
  *
- * <p>Regression tests for the Paper watchdog freeze: the refresh cycle used to
- * be scheduled with {@code scheduleSyncRepeatingTask}, causing SkinsRestorer's
- * {@code getSkinForPlayer()} to perform synchronous Mojang HTTPS fetches on the
- * main thread.</p>
+ * <p>Regression tests for issue #9 (watchdog freeze caused by synchronous skin
+ * resolution) and issue #7 (Folia rejects {@code BukkitScheduler}).</p>
  */
 class SkinServiceThreadingTest {
 
@@ -48,11 +47,9 @@ class SkinServiceThreadingTest {
         plugin = mock(AddHeads.class);
         bukkit = mockStatic(Bukkit.class);
         bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
-        // SkinsRestorer absent: its property lookup short-circuits to an empty list.
         bukkit.when(Bukkit::getPluginManager).thenReturn(mock(PluginManager.class));
         // Unknown offline players make Utils.resolveName fall back to the UUID string.
-        OfflinePlayer unknownOfflinePlayer = mock(OfflinePlayer.class);
-        bukkit.when(() -> Bukkit.getOfflinePlayer(any(UUID.class))).thenReturn(unknownOfflinePlayer);
+        bukkit.when(() -> Bukkit.getOfflinePlayer(any(UUID.class))).thenReturn(mock(OfflinePlayer.class));
         skinService = new SkinService(plugin);
     }
 
@@ -61,92 +58,92 @@ class SkinServiceThreadingTest {
         bukkit.close();
     }
 
-    private BukkitTask stubAsyncTask() {
+    private BukkitTask stubAsyncTimer() {
         BukkitTask task = mock(BukkitTask.class);
-        when(task.getTaskId()).thenReturn(42);
+        when(scheduler.runTaskTimerAsynchronously(any(), any(Runnable.class), anyLong(), anyLong()))
+                .thenReturn(task);
         return task;
     }
 
     @Test
-    void startSchedulesRefreshCycleAsynchronously() {
-        BukkitTask task = stubAsyncTask();
-        when(scheduler.runTaskTimerAsynchronously(any(), any(Runnable.class), anyLong(), anyLong()))
-                .thenReturn(task);
+    void startSchedulesRefreshCycleOffTheTickingThreads() {
+        stubAsyncTimer();
 
         skinService.start(6000L);
 
         verify(scheduler).runTaskTimerAsynchronously(eq(plugin), any(Runnable.class), eq(6000L), eq(6000L));
         verify(scheduler, never()).scheduleSyncRepeatingTask(any(), any(Runnable.class), anyLong(), anyLong());
-        // Immediate initial pass is off the main thread too.
+        // The immediate first pass is off the ticking threads as well.
         verify(scheduler).runTaskAsynchronously(eq(plugin), any(Runnable.class));
     }
 
     @Test
-    void asyncCycleDispatchesTabRefreshBackToMainThread() {
+    void stopCancelsTheRefreshCycle() {
+        BukkitTask task = stubAsyncTimer();
+
+        skinService.start(6000L);
+        skinService.stop();
+
+        verify(task).cancel();
+    }
+
+    @Test
+    void refreshAlwaysDefersToTheAsyncScheduler() {
+        skinService.refresh(UUID.randomUUID(), "Notch");
+
+        verify(scheduler).runTaskAsynchronously(eq(plugin), any(Runnable.class));
+        // No work is queued on the global thread and nothing is resolved inline.
+        verify(scheduler, never()).runTask(any(), any(Runnable.class));
+        bukkit.verify(() -> Bukkit.getPluginManager(), never());
+    }
+
+    @Test
+    void refreshLaterUsesADelayedAsyncTask() {
+        skinService.refreshLater(UUID.randomUUID(), "Notch", 20L);
+
+        verify(scheduler).runTaskLaterAsynchronously(eq(plugin), any(Runnable.class), eq(20L));
+        verify(scheduler, never()).runTaskLater(any(), any(Runnable.class), anyLong());
+    }
+
+    @Test
+    void getTextureWithColdCacheReturnsNullAndWarmsAsynchronously() {
+        Utils.TextureData texture = skinService.getTexture(UUID.randomUUID(), "Notch");
+
+        assertNull(texture);
+        verify(scheduler).runTaskAsynchronously(eq(plugin), any(Runnable.class));
+        bukkit.verify(() -> Bukkit.getPluginManager(), never());
+    }
+
+    @Test
+    void refreshCycleDispatchesTabRefreshBackToTheGlobalThread() {
         bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of());
-        BukkitTask task = stubAsyncTask();
-        when(scheduler.runTaskTimerAsynchronously(any(), any(Runnable.class), anyLong(), anyLong()))
-                .thenReturn(task);
+        stubAsyncTimer();
 
         skinService.start(6000L);
 
         ArgumentCaptor<Runnable> cycleCaptor = ArgumentCaptor.forClass(Runnable.class);
         verify(scheduler).runTaskTimerAsynchronously(eq(plugin), cycleCaptor.capture(), eq(6000L), eq(6000L));
-
         cycleCaptor.getValue().run();
 
-        ArgumentCaptor<Runnable> syncCaptor = ArgumentCaptor.forClass(Runnable.class);
-        verify(scheduler).runTask(eq(plugin), syncCaptor.capture());
-        syncCaptor.getValue().run();
+        ArgumentCaptor<Runnable> globalCaptor = ArgumentCaptor.forClass(Runnable.class);
+        verify(scheduler).runTask(eq(plugin), globalCaptor.capture());
+        globalCaptor.getValue().run();
         verify(plugin).refreshAllTabListNames();
     }
 
     @Test
-    void refreshOnMainThreadIsDelegatedToAsyncScheduler() {
-        bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
-
-        skinService.refresh(UUID.randomUUID(), "Notch");
-
-        // No synchronous resolution: the work is queued for the async scheduler.
-        verify(scheduler).runTaskAsynchronously(eq(plugin), any(Runnable.class));
-    }
-
-    @Test
-    void refreshOffMainThreadResolvesInline() {
-        bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);
-        bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of());
-
-        skinService.refresh(UUID.randomUUID(), null);
-
-        // No main-thread hop for already-async callers.
-        verify(scheduler, never()).runTaskAsynchronously(eq(plugin), any(Runnable.class));
-    }
-
-    @Test
-    void getTextureOnMainThreadWithColdCacheReturnsNullAndWarmsAsync() {
-        bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
-
-        Utils.TextureData result = skinService.getTexture(UUID.randomUUID(), "Notch");
-
-        assertNull(result);
-        verify(scheduler).runTaskAsynchronously(eq(plugin), any(Runnable.class));
-    }
-
-    @Test
-    void refreshCycleWithOnlinePlayersStillRunsOffMainThread() {
-        bukkit.when(Bukkit::isPrimaryThread).thenReturn(false);
+    void refreshCycleWithOnlinePlayersStillRunsOffTheTickingThreads() {
         UUID playerId = UUID.randomUUID();
-
         Player player = mock(Player.class);
         when(player.getUniqueId()).thenReturn(playerId);
-        // Unknown name: resolution yields nothing, so no follow-up Paper profile
-        // or Mojang HTTP lookups are triggered either.
+        // Unknown name: resolution yields nothing, so no follow-up profile or
+        // Mojang lookups are triggered either.
         when(player.getName()).thenReturn(null);
         bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(player));
 
         skinService.refreshOnlinePlayers();
 
-        // The only main-thread hop is the tab-list refresh after the cycle.
+        // The only global-thread hop is the tab-list refresh after the cycle.
         verify(scheduler).runTask(eq(plugin), any(Runnable.class));
         // Resolving an unknown player must not queue additional async work.
         verify(scheduler, never()).runTaskAsynchronously(eq(plugin), any(Runnable.class));
