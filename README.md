@@ -28,10 +28,11 @@ AddHeads also exposes a public API and PlaceholderAPI outputs so other plugins c
 - automatic config and language key backfill
 - per-player toggles for chat and player-list heads
 - update checks from GitHub and Modrinth
+- Folia support through region-aware scheduling
 
 ### Requirements
 
-- Paper / Purpur `1.21.11+`
+- Paper / Purpur / Folia `1.21.11+`
 - Java `21`
 
 Optional:
@@ -41,7 +42,7 @@ Optional:
 
 ### Installation
 
-1. Build or download `AddHeads-1.1.0.jar`.
+1. Build or download `AddHeads-1.3.0.jar`.
 2. Place it into your server `plugins/` folder.
 3. Start or restart the server.
 4. Edit `config.yml` and `languages/*.yml` if needed.
@@ -214,10 +215,11 @@ AddHeads не перехватывает форматирование чата �
 - автоматическое добавление недостающих ключей в конфиг и языковые файлы
 - персональные переключатели для чата и списка игроков
 - проверка обновлений через GitHub и Modrinth
+- поддержка Folia через регион-осведомлённое планирование
 
 ### Требования
 
-- Paper / Purpur `1.21.11+`
+- Paper / Purpur / Folia `1.21.11+`
 - Java `21`
 
 Опционально:
@@ -227,7 +229,7 @@ AddHeads не перехватывает форматирование чата �
 
 ### Установка
 
-1. Соберите или скачайте `AddHeads-1.1.0.jar`.
+1. Соберите или скачайте `AddHeads-1.3.0.jar`.
 2. Положите его в папку `plugins/`.
 3. Запустите или перезапустите сервер.
 4. При необходимости отредактируйте `config.yml` и `languages/*.yml`.
