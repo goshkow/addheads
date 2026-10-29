@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,6 +25,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Caches skin texture data so placeholders and chat decoration do not need to
@@ -37,7 +39,10 @@ public final class SkinService {
     private final AddHeads plugin;
     private final ConcurrentMap<UUID, Utils.TextureData> cache = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, CompletableFuture<Utils.TextureData>> pendingMojangLookups = new ConcurrentHashMap<>();
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final AtomicBoolean refreshCycleRunning = new AtomicBoolean(false);
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5L))
+            .build();
     private int refreshTaskId = -1;
 
     public SkinService(AddHeads plugin) {
@@ -46,15 +51,18 @@ public final class SkinService {
 
     public void start(long refreshTicks) {
         stop();
-        refreshOnlinePlayers();
         if (refreshTicks > 0L) {
-            refreshTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(
+            // Skin resolution blocks on SkinsRestorer/Mojang HTTPS lookups, so
+            // the refresh cycle must run off the server thread. Main-thread-only
+            // work (tab list names) is dispatched back inside refreshOnlinePlayers().
+            refreshTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(
                     plugin,
                     this::refreshOnlinePlayers,
                     refreshTicks,
                     refreshTicks
-            );
+            ).getTaskId();
         }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::refreshOnlinePlayers);
     }
 
     public void stop() {
@@ -76,6 +84,15 @@ public final class SkinService {
 
     public void refresh(UUID playerId, String playerName) {
         if (playerId == null) {
+            return;
+        }
+
+        if (Bukkit.isPrimaryThread()) {
+            // Resolution blocks on SkinsRestorer/Mojang HTTPS lookups; never
+            // let that happen on the server thread.
+            Bukkit.getScheduler().runTaskAsynchronously(
+                    plugin,
+                    () -> refresh(playerId, playerName));
             return;
         }
 
@@ -103,10 +120,19 @@ public final class SkinService {
     }
 
     public void refreshOnlinePlayers() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            refresh(player.getUniqueId(), player.getName());
+        // Guard against overlapping cycles while a previous run is still
+        // resolving skins (e.g. during a slow Mojang lookup).
+        if (!refreshCycleRunning.compareAndSet(false, true)) {
+            return;
         }
-        plugin.refreshAllTabListNames();
+        try {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                refresh(player.getUniqueId(), player.getName());
+            }
+        } finally {
+            refreshCycleRunning.set(false);
+        }
+        Bukkit.getScheduler().runTask(plugin, plugin::refreshAllTabListNames);
     }
 
     public Utils.TextureData getTexture(UUID playerId, String playerName) {
@@ -119,14 +145,13 @@ public final class SkinService {
         }
 
         if (Bukkit.isPrimaryThread()) {
-            Utils.TextureData resolved = resolveTexture(playerId, playerName);
-            if (resolved != null) {
-                Utils.TextureData existing = cache.put(playerId, resolved);
-                if (!Objects.equals(existing, resolved)) {
-                    notifySkinResolved(playerId, playerName, resolved);
-                }
-            }
-            return resolved;
+            // Cold cache: resolving here would block the server thread on
+            // SkinsRestorer/Mojang HTTPS lookups. Return null (renderers fall
+            // back to a name-based lookup) and warm the cache asynchronously.
+            Bukkit.getScheduler().runTaskAsynchronously(
+                    plugin,
+                    () -> refresh(playerId, playerName));
+            return null;
         }
 
         Utils.TextureData asyncResolved = resolveTextureWithoutLivePlayer(playerId, playerName);
@@ -220,6 +245,7 @@ public final class SkinService {
             HttpRequest profileRequest = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.mojang.com/users/profiles/minecraft/" + encodedName))
                     .GET()
+                    .timeout(Duration.ofSeconds(10L))
                     .header("User-Agent", "AddHeads/" + plugin.getDescription().getVersion())
                     .build();
 
@@ -242,6 +268,7 @@ public final class SkinService {
             HttpRequest textureRequest = HttpRequest.newBuilder()
                     .uri(URI.create("https://sessionserver.mojang.com/session/minecraft/profile/" + id + "?unsigned=false"))
                     .GET()
+                    .timeout(Duration.ofSeconds(10L))
                     .header("User-Agent", "AddHeads/" + plugin.getDescription().getVersion())
                     .build();
 
