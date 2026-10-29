@@ -55,7 +55,7 @@ public final class SettingsMenuListener implements Listener {
 
         event.setCancelled(true);
         String message = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
-        plugin.getServer().getScheduler().runTask(plugin, () -> menu.handleChatInput(player, message));
+        Schedulers.runFor(plugin, player, () -> menu.handleChatInput(player, message));
     }
 
     @EventHandler

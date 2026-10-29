@@ -35,6 +35,19 @@ public final class AddHeadsApiProvider implements AddHeadsProvider {
         };
     }
 
+    /**
+     * Returns player-list head markup that TAB understands in both of its
+     * parsers. Used by {@link TabApiBridge}.
+     *
+     * @param playerId   player id, may be {@code null}
+     * @param playerName player name, may be {@code null}
+     * @return TAB-compatible head markup or an empty string
+     */
+    String getTabHeadMarkup(UUID playerId, String playerName) {
+        String textureHash = Utils.buildTabTextureHash(plugin.getSkinService(), playerId, playerName);
+        return Utils.buildTabHeadMarkup(playerId, playerName, textureHash);
+    }
+
     @Override
     public SkinTexture getSkinTexture(UUID playerId, String playerName) {
         Utils.TextureData texture = Utils.getCurrentTextureData(plugin.getSkinService(), playerId, playerName);

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+
+- Stopped rewriting `components.minimessage-support` inside TAB's own `config.yml`; the server owner's TAB parser mode is left untouched (#6).
+- Rendered player-list heads with syntax TAB understands in both of its parsers (`<head_texture:HASH>`, `<head:UUID>`, `<head:NAME>`) instead of the previous `<head:signed_texture:...>`, `<head:id:...>`, `<head:name:...>` and `<head:texture:...>` forms, which TAB read as head definitions literally named `signed_texture`, `id`, `name` or `texture` (#6).
+- Added full Folia support: the plugin is marked `folia-supported` and every scheduled task now goes through a new `Schedulers` facade that uses the global region, async and entity schedulers on Folia and the regular Bukkit scheduler elsewhere (#7).
+- Player-list writes and inventory opens are dispatched to the thread that owns the player on Folia (#7).
+- Skipped the ProtocolLib viewer path on Folia, where ProtocolLib is not supported, and used the per-player player-list path instead (#7).
+- Kept the 1.2.8 watchdog fix, now expressed through the same scheduler facade: skin resolution never runs on a ticking thread, refresh cycles cannot overlap, and Mojang HTTP calls have connect and request timeouts (#9).
+- Added `TabHeadMarkupTest` and rewrote `SkinServiceThreadingTest` to cover the TAB markup contract and the scheduling guarantees.
+
 ## 1.2.8
 
 - Fixed a potential server watchdog freeze caused by synchronous skin resolution during player-list head refreshes.

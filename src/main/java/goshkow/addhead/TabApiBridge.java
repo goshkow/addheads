@@ -68,8 +68,8 @@ public final class TabApiBridge {
             }
 
             registerHandlers();
-            Bukkit.getScheduler().runTask(plugin, this::refreshAll);
-            Bukkit.getScheduler().runTaskLater(plugin, this::refreshAll, 40L);
+            Schedulers.runGlobal(plugin, this::refreshAll);
+            Schedulers.runGlobalLater(plugin, this::refreshAll, 40L);
             plugin.getLogger().info("TAB detected. Direct TAB API tablist compatibility is enabled.");
             return true;
         } catch (ReflectiveOperationException | RuntimeException exception) {
@@ -300,7 +300,7 @@ public final class TabApiBridge {
             return;
         }
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        Schedulers.runGlobal(plugin, () -> {
             Player player = Bukkit.getPlayer(playerId);
             if (player == null) {
                 return;
@@ -312,7 +312,7 @@ public final class TabApiBridge {
     }
 
     private void handleTabLoad() {
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        Schedulers.runGlobal(plugin, () -> {
             placeholderManager = invoke(tabApi, "getPlaceholderManager");
             unregisterPlaceholder();
             registerRelationalPlaceholder();
@@ -460,36 +460,7 @@ public final class TabApiBridge {
             return "";
         }
 
-        String head = plugin.getApiProvider().getFormattedHead(
-                targetId,
-                targetName,
-                goshkow.addhead.api.HeadFormat.SIGNED_TAG,
-                plugin.getApiProvider().getDefaultOptions(goshkow.addhead.api.HeadRenderTarget.TAB)
-        );
-        if (head == null || head.isBlank()) {
-            head = plugin.getApiProvider().getFormattedHead(
-                    targetId,
-                    targetName,
-                    goshkow.addhead.api.HeadFormat.TEXTURE_TAG,
-                    plugin.getApiProvider().getDefaultOptions(goshkow.addhead.api.HeadRenderTarget.TAB)
-            );
-        }
-        if (head == null || head.isBlank()) {
-            head = plugin.getApiProvider().getFormattedHead(
-                    targetId,
-                    targetName,
-                    goshkow.addhead.api.HeadFormat.ID_TAG,
-                    plugin.getApiProvider().getDefaultOptions(goshkow.addhead.api.HeadRenderTarget.TAB)
-            );
-        }
-        if (head == null || head.isBlank()) {
-            head = plugin.getApiProvider().getFormattedHead(
-                    targetId,
-                    targetName,
-                    goshkow.addhead.api.HeadFormat.NAME_TAG,
-                    plugin.getApiProvider().getDefaultOptions(goshkow.addhead.api.HeadRenderTarget.TAB)
-            );
-        }
+        String head = plugin.getApiProvider().getTabHeadMarkup(targetId, targetName);
         if (head == null || head.isBlank()) {
             return "";
         }

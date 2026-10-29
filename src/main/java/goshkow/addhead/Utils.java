@@ -185,13 +185,56 @@ public final class Utils {
     }
 
     public static String buildTabTexture(SkinService skinService, UUID playerId, String playerName) {
+        String hash = buildTabTextureHash(skinService, playerId, playerName);
+        return hash.isBlank() ? "" : "<head:texture:" + hash + ">";
+    }
+
+    /**
+     * Returns the raw Minecraft texture hash of the cached skin, or an empty
+     * string when no texture is known yet.
+     *
+     * @param skinService shared skin cache
+     * @param playerId    player id
+     * @param playerName  player name
+     * @return texture hash or an empty string
+     */
+    public static String buildTabTextureHash(SkinService skinService, UUID playerId, String playerName) {
         TextureData texture = getCurrentTextureData(skinService, playerId, playerName);
-        if (texture == null) {
+        if (texture == null || texture.value == null || texture.value.isBlank()) {
             return "";
         }
 
         String hash = extractTextureHash(texture.value);
-        return hash == null || hash.isBlank() ? "" : "<head:texture:" + hash + ">";
+        return hash == null || hash.isBlank() ? "" : hash;
+    }
+
+    /**
+     * Builds player-list head markup that TAB understands in both of its parsers
+     * (the MiniMessage parser and TAB's own component parser):
+     * {@code <head_texture:HASH>}, {@code <head:UUID>} or {@code <head:NAME>}.
+     *
+     * <p>Regression context for issue #6: earlier versions emitted
+     * {@code <head:signed_texture:...>} / {@code <head:id:...>} / {@code <head:name:...>},
+     * which TAB parses as head definitions named "signed_texture", "id" or
+     * "name", and worked around that by forcing TAB's
+     * {@code components.minimessage-support} to {@code false}.</p>
+     *
+     * @param playerId    player id, may be {@code null}
+     * @param playerName  player name, may be {@code null}
+     * @param textureHash cached texture hash, may be empty
+     * @return TAB-compatible head markup or an empty string
+     */
+    public static String buildTabHeadMarkup(UUID playerId, String playerName, String textureHash) {
+        if (textureHash != null && !textureHash.isBlank()) {
+            return "<head_texture:" + textureHash + ">";
+        }
+        if (playerId != null) {
+            return "<head:" + playerId + ">";
+        }
+        if (playerName != null && !playerName.isBlank() && playerName.length() <= 16) {
+            return "<head:" + playerName + ">";
+        }
+        return "";
     }
 
     public static String buildSignedTextureValue(SkinService skinService, UUID playerId, String playerName) {
